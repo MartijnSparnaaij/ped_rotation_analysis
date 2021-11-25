@@ -1,6 +1,8 @@
 % Assign the given variables to the base workspace
 %
 % assignInBase(varname_1, var_1, ..., varname_n, var_n)
+%
+% © Martijn Sparnaaij (2019)
 
 function assignInBase(varargin)
   

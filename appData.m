@@ -1,7 +1,7 @@
 % Function for setting and getting the standard application data
 %
 % Called by getAppData and setAppData
-
+%
 % © Martijn Sparnaaij (2019)
 
 function varargout = appData(action, varargin)

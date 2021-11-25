@@ -7,7 +7,7 @@
 % data = application data
 %
 % Calls appData
-
+%
 % © Martijn Sparnaaij (2019)
 
 function varargout = setAppData(h, data, varargin)

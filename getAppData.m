@@ -9,7 +9,7 @@
 % data      = standard application data or just the data from the given fieldname
 %
 % Calls appData
-
+%
 % © Martijn Sparnaaij (2019)
 
 function data = getAppData(h, varargin)

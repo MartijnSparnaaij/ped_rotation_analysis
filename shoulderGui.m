@@ -1,5 +1,5 @@
 % Graphical User Interface for annotating shoulders in video data
-
+%
 % © Martijn Sparnaaij (2019)
 
 function varargout = shoulderGui(action, varargin)
@@ -29,7 +29,7 @@ function shoulderGui_build
 figPrp = struct;
 figPrp.Color            = [1 1 1] * 0.84;
 figPrp.MenuBar          = 'none';
-figPrp.Name             = 'Shoulder gui';
+figPrp.Name             = 'Pedestrian shoulder rotation analysis tool';
 figPrp.Tag              = shoulderGui_getTag;
 figPrp.NumberTitle      = 'off';
 figPrp.Resize           = 'on';
@@ -113,16 +113,18 @@ subPrp.point.markerFaceColorSelected = [255,195,0]/255;
 
 appData.rectanglePrps.sub = subPrp;
 
-appData = shoulderGui_init(appData);
-
+appData = shoulderGui_initAppData(appData);
 setAppData(fig, appData)
+
+shoulderGui_updateImagePanel(fig)
+
 set(fig, 'Visible', 'on')
 
 end  % #build
 %__________________________________________________________
 %% #init
 %
-function appData = shoulderGui_init(appData)
+function appData = shoulderGui_initAppData(appData)
 
 appData.majorStepInd = 0;
 appData.minorStepInd = 0;
@@ -180,6 +182,7 @@ y = 5;
 uiPrp                       = uiPrp0;
 uiPrp.Style                 = 'pushbutton';
 uiPrp.String                = 'Stop';
+uiPrp.Enable                = 'off';
 uiPrp.HorizontalAlignment   = 'left';
 uiPrp.Callback              = '';
 uiPrp.Position              = [x y buttonSize];
@@ -208,7 +211,8 @@ pnlData.prevButton          = uicontrol(uiPrp);
 
 uiPrp                       = uiPrp0;
 uiPrp.Style                 = 'pushbutton';
-uiPrp.String                = 'Start';
+uiPrp.String                = 'Next';
+uiPrp.Enable                = 'off';
 uiPrp.HorizontalAlignment   = 'left';
 uiPrp.Callback              = @shoulderGui_nextStep;
 uiPrp.Position              = [x+5+buttonSize(1) y buttonSize];
@@ -322,7 +326,7 @@ end  % #getTag
 %__________________________________________________________
 %% #close
 %
-function shoulderGui_close(h, evd)
+function shoulderGui_close(h, ~)
 
 fig = hfigure(h);
 
@@ -342,7 +346,7 @@ end  % #close
 %__________________________________________________________
 %% #resize
 %
-function shoulderGui_resize(h, evd)
+function shoulderGui_resize(h, ~)
 
 fig = hfigure(h);
 appData = getAppData(fig);
@@ -379,7 +383,7 @@ end  % #resize
 %__________________________________________________________
 %% #nextStep
 %
-function shoulderGui_nextStep(h, evd)
+function shoulderGui_nextStep(h, ~)
 
 fig = hfigure(h);
 appData = getAppData(fig);
@@ -394,6 +398,8 @@ switch appData.majorStepInd
             shoulderGui_saveData2file(appData, 'videoData');
             appData.majorStepInd = appData.majorStepInd + 1;
             set(appData.img, 'ButtonDownFcn', @shoulderGui_rectangleButtonDownCB)
+        else
+            msgbox('No video loaded yet!', 'No video','modal')
         end
     case 2 % Set density rectangle
         if isempty(appData.rectangle)
@@ -460,7 +466,7 @@ end  % #nextStep
 %__________________________________________________________
 %% #previousStep
 %
-function shoulderGui_previousStep(h, evd)
+function shoulderGui_previousStep(h, ~)
 
 fig = hfigure(h);
 
@@ -516,7 +522,7 @@ end  % #previousStep
 %__________________________________________________________
 %% #stop
 %
-function shoulderGui_stop(h, evd)
+function shoulderGui_stop(h, ~)
 
 answer = questdlg('Are you sure the analysis is finished', 'Stop', 'Yes', 'No', 'No');
 if ~strcmpi(answer, 'yes')
@@ -541,7 +547,7 @@ end  % #stop
 %__________________________________________________________
 %% #goTo
 %
-function shoulderGui_goTo(h, evd)
+function shoulderGui_goTo(h, ~)
 
 fig = hfigure(h);
 analysisStepCount = getAppData(fig, 'analysisStepCount');
@@ -612,13 +618,13 @@ for ii = 1:numel(pnlData.steps)
     set(pnlData.(pnlData.steps(ii).name), 'FontWeight', 'normal')
 end % for ii
 
-set(pnlData.nextButton, 'String', 'Next')
+set(pnlData.nextButton, 'enable', 'on')
 set(pnlData.prevButton, 'enable', 'on')
 if majorStepInd <= 1
     set(pnlData.prevButton, 'enable', 'off')
 end
 if majorStepInd == 0
-    set(pnlData.nextButton, 'String', 'Start')
+    set(pnlData.nextButton, 'enable', 'off')
     return
 end
 
@@ -654,6 +660,24 @@ pnlPrp.BackgroundColor  = [1 1 1] * 0.40;
 pnlPrp.BorderType       = 'beveledout';
 
 switch appData.majorStepInd
+    case 0 % Start new analysis or continue from previous analysis
+        pnlPrp.Position = [0,0,134,78];
+        pnlData.overlay = uipanel(pnlPrp);
+        uiPrp           = struct;
+        uiPrp.Parent    = pnlData.overlay;
+        uiPrp.Units     = 'Points';
+        uiPrp.Style     = 'PushButton';
+        uiPrp.FontSize  = 11;
+
+        uiPrp.String    = 'Start new analysis';
+        uiPrp.Position  = [9, 43, 115, 25];
+        uiPrp.Callback  = @shoulderGui_nextStep;
+        uicontrol(uiPrp)      
+
+        uiPrp.String    = 'Continue analysis';
+        uiPrp.Position  = [9, 9, 115, 25];
+        uiPrp.Callback  = @shoulderGui_loadMat;
+        uicontrol(uiPrp)      
     case 1 % Load video
         pnlPrp.Position = [0,0,100,45];
         pnlData.overlay = uipanel(pnlPrp);
@@ -664,7 +688,7 @@ switch appData.majorStepInd
         uiPrp.String    = 'Load video';
         uiPrp.FontSize  = 11;
         uiPrp.Position  = [9, 9, 85, 25];
-        uiPrp.Callback  = @shoulderGui_loadData;
+        uiPrp.Callback  = @shoulderGui_loadVideo;
         uicontrol(uiPrp)
     case 3 % Set interval
         pnlData.interval = getAppData(fig, 'interval');
@@ -727,9 +751,9 @@ shoulderGui_resize(fig, '')
 
 end  % #updateImagePanel
 %__________________________________________________________
-%% #loadData
+%% #loadVideo
 %
-function shoulderGui_loadData(h, evd)
+function videoData = shoulderGui_loadVideo(h, ~)
 
 main = fileparts(cd);
 dataPd = fullfile(main, 'Data');
@@ -737,25 +761,10 @@ if ~isfolder(dataPd)
     dataPd = cd;
 end
 
-[file, path, ind] = uigetfile({'*.mp4';'*.mat'}, 'Select movie', dataPd);
+[file, path] = uigetfile({'*.mp4'}, 'Select movie', dataPd);
 if file == 0
     return
 end
-
-if ind == 2
-    shoulderGui_loadMat(path, file, hfigure(h))
-else
-    videoData = shoulderGui_loadVideo(path, file);
-    fig = hfigure(h);
-    setAppData(fig, videoData, 'videoData')
-    shoulderGui_initAxImage(fig)
-end
-
-end  % #loadData
-%__________________________________________________________
-%% #loadVideo
-%
-function videoData = shoulderGui_loadVideo(path, file)
 
 videoData = struct;
 videoData.flNm = fullfile(path, file);
@@ -768,17 +777,32 @@ catch
     return
 end
 
+fig = hfigure(h);
+setAppData(fig, videoData, 'videoData')
+shoulderGui_initAxImage(fig)
+
 end  % #loadVideo
 %__________________________________________________________
 %% #loadMat
 %
-function shoulderGui_loadMat(path, file, fig)
+function shoulderGui_loadMat(h, ~)
+
+main = fileparts(cd);
+dataPd = fullfile(main, 'Data');
+if ~isfolder(dataPd)
+    dataPd = cd;
+end
+
+[file, path] = uigetfile({'*.mp4';'*.mat'}, 'Select movie', dataPd);
+if file == 0
+    return
+end
 
 filename = fullfile(path, file);
 data = load(filename);
 
+fig = hfigure(h);
 appData = getAppData(fig);
-
 
 if isfile(data.video.filename)
     [pd, fl, ext] = fileparts(data.video.filename);
@@ -970,7 +994,7 @@ if ~isempty(appData.groups(1).shoulders)
         orgShoulderData = appData.groups(ii).shoulders;
         orgShoulderData(cellfun(@isempty, orgShoulderData(:,1)),1) = {NaN};
         orgFrameNrs = cell2mat(orgShoulderData(:,1));
-        newFrameNrs = [1:appData.interval:appData.interval*appData.analysisStepCount]';
+        newFrameNrs = transpose(1:appData.interval:appData.interval*appData.analysisStepCount);
         frameNrs = union(newFrameNrs, orgFrameNrs);
         [~, orgDataInd ,~] = intersect(frameNrs, orgFrameNrs);
         [~, newDataInd ,~] = intersect(frameNrs, newFrameNrs);
@@ -1034,7 +1058,7 @@ end  % #rectangleCB
 %__________________________________________________________
 %% #rectangleButtonMotionCB
 %
-function shoulderGui_rectangleButtonMotionCB(h, evd, fig)
+function shoulderGui_rectangleButtonMotionCB(~, evd, fig)
 
 % update regtangle
 activePoint = getAppData(fig, 'rectangle.activePoint');
@@ -1076,7 +1100,7 @@ end  % #rectangleButtonMotionCB
 %__________________________________________________________
 %% #rectangleButtonUpCB
 %
-function shoulderGui_rectangleButtonUpCB(h, evd, fig)
+function shoulderGui_rectangleButtonUpCB(~, ~, fig)
 
 set(fig, 'WindowButtonMotionFcn', '')
 set(fig, 'WindowButtonUpFcn', '')
@@ -1608,7 +1632,7 @@ end  % #removeShoulderPoint
 %__________________________________________________________
 %% #moveShoulderPoint
 %
-function shoulderGui_moveShoulderPoint(h, evd, hPoint)
+function shoulderGui_moveShoulderPoint(~, evd, hPoint)
 
 x = evd.IntersectionPoint(1);
 y = evd.IntersectionPoint(2);
@@ -1633,7 +1657,7 @@ end  % #moveShoulderPoint
 %__________________________________________________________
 %% #endMoveShoulderPoint
 %
-function shoulderGui_endMoveShoulderPoint(h, evd, fig, hPoint)
+function shoulderGui_endMoveShoulderPoint(~, ~, fig, hPoint)
 
 set(fig, 'WindowButtonMotionFcn', '')
 set(fig, 'WindowButtonUpFcn', '')
@@ -1955,7 +1979,7 @@ end  % #getRectangleSaveData
 %
 function filename = shoulderGui_chooseSaveFilename()
 
-[file, path] = uiputfile('*.mat', 'Choose a file for saving', 'shoulderData.mat');
+[file, path] = uiputfile('*.mat', 'Choose a file for saving the analysis data', 'shoulderData.mat');
 if file == 0
     hDlg = warndlg('A save file must be chosen to continue!', 'Warning', '-modal');
     waitfor(hDlg)
