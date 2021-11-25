@@ -4,13 +4,20 @@ The Pedestrian Rotation Analysis Tool is a small Matlab based tool that enables 
 
 ## How to use
 
-Start Matlab and set the current directory to directory containing the m-files (i.e. shoulderGui.m etc.). Next run shoulderGui.m, which should shot the following window:
+Start Matlab and set the current directory to directory containing the m-files (i.e. shoulderGui.m etc.). Next run shoulderGui.m, which should show the following window:
 
-[Start screen](images/start_screen.jpg)
+![Start screen](images/start_screen.jpg)
+
+The start screen shows two options:
+1. Start a new analysis
+2. Continue an analysis
+
+Both options are explained in more detail below.
 
 ### Start new analysis
 
-You can also continue a previous analysis. See the section ["Continue from existing analysis"](#continue_from_existing_analysis) for instructions on how to do this.
+
+
 
 #### Load video
 
