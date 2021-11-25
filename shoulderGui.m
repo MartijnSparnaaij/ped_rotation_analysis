@@ -118,11 +118,16 @@ setAppData(fig, appData)
 
 shoulderGui_updateImagePanel(fig)
 
+figPos = get(fig, 'Position');
+orgHeight = figPos(4);
+figPos(4) = max(figPos(4), getAppData(appData.ctrlPnl, 'height'));
+figPos(2) = figPos(2) - (figPos(4) - orgHeight)/2;
+set(fig, 'Position', figPos);
 set(fig, 'Visible', 'on')
 
 end  % #build
 %__________________________________________________________
-%% #init
+%% #initAppData
 %
 function appData = shoulderGui_initAppData(appData)
 
@@ -132,6 +137,7 @@ appData.analysisStepInd = 0;
 appData.analysisStepCount = 0;
 appData.videoData = '';
 appData.img = '';
+appData.orgImgAxLimit = [];
 appData.infoText = '';
 appData.stepText = '';
 appData.interval = 50;
@@ -152,7 +158,7 @@ appData.curRectangleID = 0;
 appData.nextIsSecondPoint = false;
 appData.lastCreatedPoint = '';
 
-end  % #init
+end  % #initAppData
 %__________________________________________________________
 %% #createControlPanel
 %
@@ -233,7 +239,7 @@ pnlData.secondGroupName = 'shoulderSecondGroup';
 
 stepsC = {
     %name                     label                       isSubstep
-    'loadData'               'Load video'                false
+    'loadData'               'Load video'                 false
     'setDensRectangle'        'Set density rectangle'     false
     'setInterval'             'Set interval'              false
     'setGroupNames'           'Set group names'           false
@@ -282,6 +288,44 @@ uiPrp.String                = 'Steps:';
 uiPrp.Position              = [x y pnlData.width - 10 labelHeight];
 uicontrol(uiPrp)
 
+
+y = y + labelHeight + 10;
+
+uiPrp.ForegroundColor       = [1 1 1]*0.4;
+uiPrp.FontSize              = 11;
+uiPrp.FontWeight            = 'normal';
+uiPrp.String                = '<data filename>';
+uiPrp.Position              = [x y pnlData.width - 10 labelHeight];
+pnlData.dataFlNmLabel       = uicontrol(uiPrp);
+
+y = y + labelHeight + 5;
+
+uiPrp.ForegroundColor       = 'k';
+uiPrp.FontSize              = 12;
+uiPrp.FontWeight            = 'bold';
+uiPrp.String                = 'Data filename';
+uiPrp.Position              = [x y pnlData.width - 10 labelHeight];
+uicontrol(uiPrp)
+
+y = y + labelHeight + 5;
+
+uiPrp.ForegroundColor       = [1 1 1]*0.4;
+uiPrp.FontSize              = 11;
+uiPrp.FontWeight            = 'normal';
+uiPrp.String                = '<video filename>';
+uiPrp.Position              = [x y pnlData.width - 10 labelHeight];
+pnlData.videoFlNmLabel      = uicontrol(uiPrp);
+
+y = y + labelHeight + 5;
+
+uiPrp.ForegroundColor       = 'k';
+uiPrp.FontSize              = 12;
+uiPrp.FontWeight            = 'bold';
+uiPrp.String                = 'Video filename';
+uiPrp.Position              = [x y pnlData.width - 10 labelHeight];
+uicontrol(uiPrp)
+
+
 pnlData.stepInd2name = stepInd2name;
 pnlData.height = y + labelHeight + 5;
 
@@ -307,8 +351,8 @@ axPrp.FontSize  = 10;
 axPrp.Box       = 'on';
 ax = axes(axPrp);
 
-xlabel(ax, 'X')
-ylabel(ax, 'Y')
+xlabel(ax, 'X [pixels]')
+ylabel(ax, 'Y [pixels]')
 
 pnlData.overlay = '';
 
@@ -394,10 +438,15 @@ switch appData.majorStepInd
     case 1 % Load video
         succes = shoulderGui_videoLoaded(fig);
         if succes
-            appData = shoulderGui_initSaveFile(appData);
+            [saveFileSucces, appData] = shoulderGui_initSaveFile(appData);
+            if ~saveFileSucces
+                return
+            end
             shoulderGui_saveData2file(appData, 'videoData');
             appData.majorStepInd = appData.majorStepInd + 1;
             set(appData.img, 'ButtonDownFcn', @shoulderGui_rectangleButtonDownCB)
+            pnlData = getAppData(getAppData(fig, 'ctrlPnl'));
+            set(pnlData.stopButton, 'enable', 'on')
         else
             msgbox('No video loaded yet!', 'No video','modal')
         end
@@ -408,6 +457,13 @@ switch appData.majorStepInd
         end
         shoulderGui_saveData2file(appData, 'rectangle');
         shoulderGui_rectangleCornersSwitch(appData, false)
+        appData.orgImgAxLimit = [get(appData.ax, 'XLim'), get(appData.ax, 'YLim')];
+        buffer = 50;
+        xLim = [max(appData.rectangle.ll(1).XData - buffer,  appData.orgImgAxLimit(1)), min(appData.rectangle.ur(1).XData + buffer, appData.orgImgAxLimit(2))];
+        yLim = [max(appData.rectangle.ll(1).YData - buffer,  appData.orgImgAxLimit(3)), min(appData.rectangle.ur(1).YData + buffer, appData.orgImgAxLimit(4))];
+        set(appData.ax, 'XLim', xLim)
+        set(appData.ax, 'YLim', yLim)
+        drawnow
         appData.majorStepInd = appData.majorStepInd + 1;
     case 3 % Set interval
         [ok, interval] = shoulderGui_getInterval(appData);
@@ -481,6 +537,9 @@ end
 
 if appData.majorStepInd == 3
     shoulderGui_rectangleCornersSwitch(appData, true)
+    set(appData.ax, 'XLim', appData.orgImgAxLimit(1:2))
+    set(appData.ax, 'YLim', appData.orgImgAxLimit(3:4))
+    drawnow
     set(fig, 'WindowKeyPressFcn', @shoulderGui_rectangleKeyPressAddSub)
 end
 
@@ -532,13 +591,14 @@ end
 fig = hfigure(h);
 appData = getAppData(fig);
 shoulderGui_saveData2file(appData, 'all')
-appData = shoulderGui_init(appData);
+appData = shoulderGui_initAppData(appData);
 cla(appData.ax)
 delete(appData.axTitle)
 appData.axTitle = '';
 setAppData(fig, appData)
 
 set(getAppData(appData.ctrlPnl, 'goToButton'), 'enable', 'off')
+set(getAppData(appData.ctrlPnl, 'stopButton'), 'enable', 'off')
 
 shoulderGui_updateImagePanel(fig)
 shoulderGui_updateSteps(fig)
@@ -620,16 +680,14 @@ end % for ii
 
 set(pnlData.nextButton, 'enable', 'on')
 set(pnlData.prevButton, 'enable', 'on')
-if majorStepInd <= 1
+if majorStepInd <= 2
     set(pnlData.prevButton, 'enable', 'off')
 end
-if majorStepInd == 0
-    set(pnlData.nextButton, 'enable', 'off')
-    return
-end
 
-mainUiCtrl = pnlData.(pnlData.stepInd2name{majorStepInd,1});
-set(mainUiCtrl, 'FontWeight', 'bold')
+if majorStepInd > 0
+    mainUiCtrl = pnlData.(pnlData.stepInd2name{majorStepInd,1});
+    set(mainUiCtrl, 'FontWeight', 'bold')
+end
 
 if minorStepInd > 0
     minorUiCtrl = pnlData.(pnlData.stepInd2name{majorStepInd,2}{minorStepInd});
@@ -755,8 +813,7 @@ end  % #updateImagePanel
 %
 function videoData = shoulderGui_loadVideo(h, ~)
 
-main = fileparts(cd);
-dataPd = fullfile(main, 'Data');
+dataPd = fullfile(cd, 'data', 'input');
 if ~isfolder(dataPd)
     dataPd = cd;
 end
@@ -778,6 +835,9 @@ catch
 end
 
 fig = hfigure(h);
+videoFlNmLabel = getAppData(getAppData(fig, 'ctrlPnl'), 'videoFlNmLabel');
+set(videoFlNmLabel, 'String', file)
+
 setAppData(fig, videoData, 'videoData')
 shoulderGui_initAxImage(fig)
 
@@ -787,8 +847,7 @@ end  % #loadVideo
 %
 function shoulderGui_loadMat(h, ~)
 
-main = fileparts(cd);
-dataPd = fullfile(main, 'Data');
+dataPd = fullfile(cd, 'data');
 if ~isfolder(dataPd)
     dataPd = cd;
 end
@@ -848,7 +907,7 @@ appData = shoulderGui_checkShoulders(appData);
 appData.majorStepInd = 4;
 appData = shoulderGui_setAxImage(appData, 1);
 appData.dataFilename = filename;
-appData = shoulderGui_initSaveFile(appData);
+[~, appData] = shoulderGui_initSaveFile(appData);
 setAppData(fig, appData)
 
 shoulderGui_updateImagePanel(fig)
@@ -956,7 +1015,7 @@ min = floor(time/60);
 sec = floor(time - min*60);
 milisec = round((time - min*60 - sec)*1000);
 
-infoStr = sprintf('Time: %02u:%02u:%04u, Frame: %03u, Frame rate: %f [frame/s]',...
+infoStr = sprintf('Time: %02u:%02u:%04u, Frame: %04u, Frame rate: %.2f [frame/s]',...
     min, sec, milisec, frameNr, videoData.vidObj.FrameRate);
 
 if ~isempty(appData.infoText)
@@ -1890,16 +1949,24 @@ end  % #clearPoints
 %__________________________________________________________
 %% #initSaveFile
 %
-function appData = shoulderGui_initSaveFile(appData)
+function [succes, appData] = shoulderGui_initSaveFile(appData)
 
 if ~isempty(appData.dataFilename)
-   filename = appData.dataFilename;
+   filename = appData.dataFilename;   
 else
-    filename = shoulderGui_chooseSaveFilename();
+    [succes, filename] = shoulderGui_chooseSaveFilename();
+    if ~succes
+        return
+    end
     appData.dataFilename = filename;
 end
 
+dataFlNmLabel = getAppData(appData.ctrlPnl, 'dataFlNmLabel');
+[~, file, ext] = fileparts(filename);
+set(dataFlNmLabel, 'String', append(file, ext))
+
 appData.dataFile = matfile(filename,'Writable',true);
+succes = true;
 
 end  % #initSaveFile
 %__________________________________________________________
@@ -1954,6 +2021,11 @@ function saveData = shoulderGui_getRectangleSaveData(rectangleData)
 
 lineFields = {'ll2ul', 'll2lr', 'lr2ur', 'ul2ur', 'll', 'ur'};
 
+if isempty(rectangleData)
+    saveData = '';
+    return
+end
+
 saveData = struct;
 if ~isfield(rectangleData, 'label')
     saveData.label = 'Main';
@@ -1977,15 +2049,22 @@ end  % #getRectangleSaveData
 %__________________________________________________________
 %% #chooseSaveFilename
 %
-function filename = shoulderGui_chooseSaveFilename()
+function [succes, filename] = shoulderGui_chooseSaveFilename()
 
-[file, path] = uiputfile('*.mat', 'Choose a file for saving the analysis data', 'shoulderData.mat');
+succes = false;
+filename = '';
+
+dataPd = fullfile(cd, 'data', 'output');
+if ~isfolder(dataPd)
+    dataPd = cd;
+end
+
+[file, path] = uiputfile('*.mat', 'Choose a file for saving the analysis data', fullfile(dataPd, 'shoulderData.mat'));
 if file == 0
-    hDlg = warndlg('A save file must be chosen to continue!', 'Warning', '-modal');
-    waitfor(hDlg)
-    filename = shoulderGui_chooseSaveFilename();
+    warndlg('A save file must be chosen to continue!', 'Warning', '-modal');
 else
     filename = fullfile(path, file);
+    succes = true;
 end
 
 end  % #chooseSaveFilename
@@ -2256,7 +2335,7 @@ appData.videoData.flNm = appData.video.filename;
 appData.dataFilename = filename;
 
 delete(filename)
-appData = shoulderGui_initSaveFile(appData);
+[~, appData] = shoulderGui_initSaveFile(appData);
 shoulderGui_saveData2file(appData, 'all')
 data = load(filename);
 save(filename, '-struct', 'data');
