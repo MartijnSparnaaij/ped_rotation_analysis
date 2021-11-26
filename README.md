@@ -40,5 +40,22 @@ Next and previous step consequences
 
 ## Output file format
 
+The analysis data is saved to a mat-file whereby the data is a structure with the following fields:
+1. video: A structure contaning information about the video data used for the analysis.
+2. analysisStepCount: The number of frames that are part of the analysis provided the given interval and number of frames in the video.
+3. interval: The analysis frame interval
+4. lastStepWithProcessedData: The last analysis step that contains shoulder rotation data
+5. rectangle: A structure contaning information about the desnity rectangle used for the analysis.
+6. groups: An array with 2 stuctures (1 per group) containing the rotation data
+
+The video, rectangle and group structures are explained in more detail below.
+
+### Video data structure
+
+### Rectangle data structure
+
+### Groups data structure
+
+
 
 
