@@ -83,35 +83,21 @@ lnPpr.LineWidth     = 1;
 lnPpr.PickableParts = 'none';
 appData.shoulderLinePrp = lnPpr;
 
-appData.rectanglePrps = struct;
-mainPrp = struct;
-mainPrp.line = struct;
-mainPrp.line.width = 3;
-mainPrp.line.color = 'g';
+rectanglePrps = struct;
 
-mainPrp.point = struct;
-mainPrp.point.marker             = 's';
-mainPrp.point.markerSize         = 10;
-mainPrp.point.markerEdgeColor    = 'k';
-mainPrp.point.markerFaceColor    = 'r';
-mainPrp.point.markerFaceColorSelected = 'y';
+rectanglePrps.line       = struct;
+rectanglePrps.line.width = 3;
+rectanglePrps.line.color = 'g';
+rectanglePrps.line.lineStyle = '-';
 
-appData.rectanglePrps.main = mainPrp;
+rectanglePrps.point                         = struct;
+rectanglePrps.point.marker                  = 's';
+rectanglePrps.point.markerSize              = 10;
+rectanglePrps.point.markerEdgeColor         = 'k';
+rectanglePrps.point.markerFaceColor         = 'r';
+rectanglePrps.point.markerFaceColorSelected = 'y';
 
-subPrp = struct;
-subPrp.line = struct;
-subPrp.line.width = 3;
-subPrp.line.colors = [0,255,161;0,255,216;0,242,255]/255;
-subPrp.line.styles = {'--', ':', '-.'};
-
-subPrp.point = struct;
-subPrp.point.marker             = 's';
-subPrp.point.markerSize         = 10;
-subPrp.point.markerEdgeColor    = 'k';
-subPrp.point.markerFaceColor    = [180,0,0]/255;
-subPrp.point.markerFaceColorSelected = [255,195,0]/255;
-
-appData.rectanglePrps.sub = subPrp;
+appData.rectanglePrps = rectanglePrps;
 
 appData = shoulderGui_initAppData(appData);
 setAppData(fig, appData)
@@ -135,6 +121,7 @@ appData.majorStepInd = 0;
 appData.minorStepInd = 0;
 appData.analysisStepInd = 0;
 appData.analysisStepCount = 0;
+appData.lastStepWithProcessedData = 0;
 appData.videoData = '';
 appData.img = '';
 appData.orgImgAxLimit = [];
@@ -152,8 +139,6 @@ appData.selectedPoint = [];
 
 appData.dataFilename = '';
 appData.dataFile = '';
-
-appData.curRectangleID = 0;
 
 appData.nextIsSecondPoint = false;
 appData.lastCreatedPoint = '';
@@ -292,10 +277,10 @@ uicontrol(uiPrp)
 y = y + labelHeight + 10;
 
 uiPrp.ForegroundColor       = [1 1 1]*0.4;
-uiPrp.FontSize              = 11;
+uiPrp.FontSize              = 9;
 uiPrp.FontWeight            = 'normal';
 uiPrp.String                = '<data filename>';
-uiPrp.Position              = [x y pnlData.width - 10 labelHeight];
+uiPrp.Position              = [x y pnlData.width - 10 labelHeight+5];
 pnlData.dataFlNmLabel       = uicontrol(uiPrp);
 
 y = y + labelHeight + 5;
@@ -310,10 +295,10 @@ uicontrol(uiPrp)
 y = y + labelHeight + 5;
 
 uiPrp.ForegroundColor       = [1 1 1]*0.4;
-uiPrp.FontSize              = 11;
+uiPrp.FontSize              = 9;
 uiPrp.FontWeight            = 'normal';
 uiPrp.String                = '<video filename>';
-uiPrp.Position              = [x y pnlData.width - 10 labelHeight];
+uiPrp.Position              = [x y pnlData.width - 10 labelHeight+5];
 pnlData.videoFlNmLabel      = uicontrol(uiPrp);
 
 y = y + labelHeight + 5;
@@ -459,8 +444,8 @@ switch appData.majorStepInd
         shoulderGui_rectangleCornersSwitch(appData, false)
         appData.orgImgAxLimit = [get(appData.ax, 'XLim'), get(appData.ax, 'YLim')];
         buffer = 50;
-        xLim = [max(appData.rectangle.ll(1).XData - buffer,  appData.orgImgAxLimit(1)), min(appData.rectangle.ur(1).XData + buffer, appData.orgImgAxLimit(2))];
-        yLim = [max(appData.rectangle.ll(1).YData - buffer,  appData.orgImgAxLimit(3)), min(appData.rectangle.ur(1).YData + buffer, appData.orgImgAxLimit(4))];
+        xLim = [max(appData.rectangle.extent.xMin - buffer,  appData.orgImgAxLimit(1)), min(appData.rectangle.extent.xMax + buffer, appData.orgImgAxLimit(2))];
+        yLim = [max(appData.rectangle.extent.yMin - buffer,  appData.orgImgAxLimit(3)), min(appData.rectangle.extent.yMax + buffer, appData.orgImgAxLimit(4))];
         set(appData.ax, 'XLim', xLim)
         set(appData.ax, 'YLim', yLim)
         drawnow
@@ -527,13 +512,6 @@ function shoulderGui_previousStep(h, ~)
 fig = hfigure(h);
 
 appData = getAppData(fig);
-if appData.majorStepInd == 2
-    % Remove rectange
-    while ~isempty(getAppData(fig, 'rectangle'))
-        shoulderGui_clearRectangle(fig);
-    end % while
-    appData = getAppData(fig);
-end
 
 if appData.majorStepInd == 3
     shoulderGui_rectangleCornersSwitch(appData, true)
@@ -610,9 +588,10 @@ end  % #stop
 function shoulderGui_goTo(h, ~)
 
 fig = hfigure(h);
+lastStepWithProcessedData = getAppData(fig, 'lastStepWithProcessedData');
 analysisStepCount = getAppData(fig, 'analysisStepCount');
 curStepInd = getAppData(fig, 'analysisStepInd');
-answer = inputdlg({'Go to step:'},'Go to step', [1, 20], {num2str(curStepInd)});
+answer = inputdlg({sprintf('Go to step (%d):', lastStepWithProcessedData)},'Go to step', [1, 20], {num2str(curStepInd)});
 
 if isempty(answer)
     return
@@ -890,6 +869,7 @@ end % for ii
 appData = getAppData(fig);
 shoulderGui_rectangleCornersSwitch(appData, false)
 
+
 for ii = 1:numel(data.groups)
     appData.groups(ii) = data.groups(ii);
     for jj = 1:size(appData.groups(ii).shoulders, 1)
@@ -903,6 +883,10 @@ for ii = 1:numel(data.groups)
     end % for jj
 end % for ii
 appData = shoulderGui_checkShoulders(appData);
+
+if isfield(data, 'lastStepWithProcessedData')
+    appData.lastStepWithProcessedData = data.lastStepWithProcessedData;
+end
 
 appData.majorStepInd = 4;
 appData = shoulderGui_setAxImage(appData, 1);
@@ -999,16 +983,9 @@ else
 end
 
 if ~isempty(appData.rectangle)
-    uistack(appData.rectangle.ll2ul, 'top')
-    uistack(appData.rectangle.ll2lr, 'top')
-    uistack(appData.rectangle.lr2ur, 'top')
-    uistack(appData.rectangle.ul2ur, 'top')
-    for ii = 1:numel(appData.rectangle.subs)
-        uistack(appData.rectangle.subs(ii).ll2ul, 'top')
-        uistack(appData.rectangle.subs(ii).ll2lr, 'top')
-        uistack(appData.rectangle.subs(ii).lr2ur, 'top')
-        uistack(appData.rectangle.subs(ii).ul2ur, 'top')
-    end % for ii
+    for ii = 1:numel(appData.rectangle.lines)
+        uistack(appData.rectangle.lines(ii), 'top')
+    end
 end
 
 min = floor(time/60);
@@ -1078,30 +1055,20 @@ function shoulderGui_rectangleButtonDownCB(h, evd)
 
 fig = hfigure(h);
 
-curID = getAppData(fig, 'curRectangleID');
-if curID == 0
-    label = 'Main';
-    rectangle = struct;
-    rectangle.activePoint = '';
-    rectangle.subs = struct([]);
-    setAppData(fig, rectangle, 'rectangle');
-else
-    label = char(curID + 64);
-end
-
-setAppData(fig, curID+1, 'curRectangleID');
+rectangle = struct;
+rectangle.activePoint = '';
+setAppData(fig, rectangle, 'rectangle');
 
 % draw rectangle
 shoulderGui_drawRectangle(fig, evd.IntersectionPoint(1),...
     evd.IntersectionPoint(2), evd.IntersectionPoint(1),...
-    evd.IntersectionPoint(2), 0, label);
+    evd.IntersectionPoint(2), 0);
 
 appData = getAppData(fig);
-rectangleS = shoulderGui_getActiveRectangle(fig);
-set(rectangleS.ur, 'MarkerFaceColor',...
-    shoulderGui_getDrawPrp(appData, 'pointMarkerFaceColorSelected'));
+set(appData.rectangle.points(2), 'MarkerFaceColor',...
+    appData.rectanglePrps.point.markerFaceColorSelected);
 
-appData.rectangle.activePoint = rectangleS.ur;
+appData.rectangle.activePoint = appData.rectangle.points(2);
 
 setAppData(fig, appData)
 % Add windowButtonMotionFcn
@@ -1120,38 +1087,38 @@ end  % #rectangleCB
 function shoulderGui_rectangleButtonMotionCB(~, evd, fig)
 
 % update regtangle
-activePoint = getAppData(fig, 'rectangle.activePoint');
 
-set(activePoint, 'XData', evd.IntersectionPoint(1),...
+rectangle = getAppData(fig, 'rectangle');
+
+set(rectangle.activePoint, 'XData', evd.IntersectionPoint(1),...
     'YData', evd.IntersectionPoint(2))
-rectangleS = shoulderGui_getActiveRectangle(fig);
 
-if activePoint == rectangleS.ur
-    x0 = get(rectangleS.ll, 'XData');
-    y0 = get(rectangleS.ll, 'YData');
+if rectangle.activePoint == rectangle.points(2)
+    x0 = get(rectangle.points(1), 'XData');
+    y0 = get(rectangle.points(1), 'YData');
     x1 = evd.IntersectionPoint(1);
     y1 = evd.IntersectionPoint(2);
 else
-    x1 = get(rectangleS.ur, 'XData');
-    y1 = get(rectangleS.ur, 'YData');
+    x1 = get(rectangle.points(2), 'XData');
+    y1 = get(rectangle.points(2), 'YData');
     x0 = evd.IntersectionPoint(1);
     y0 = evd.IntersectionPoint(2);
 end
 
-if rectangleS.angle ~= 0
-    angle = -rectangleS.angle;
+if rectangle.angle ~= 0
+    angle = -rectangle.angle;
     R = [cosd(angle), -sind(angle);sind(angle), cosd(angle)];
     virtualCoords = R*[x1-x0; y1-y0];
     x1 = virtualCoords(1) + x0;
     y1 = virtualCoords(2) + y0;
 end
 
-lineCoords = shoulderGui_getRectangleLineCoords(x0, y0, x1, y1, rectangleS.angle);
-set(rectangleS.ll2ul, 'XData', lineCoords.ll2ul.x, 'YData', lineCoords.ll2ul.y)
-set(rectangleS.ll2lr, 'XData', lineCoords.ll2lr.x, 'YData', lineCoords.ll2lr.y)
-set(rectangleS.lr2ur, 'XData', lineCoords.lr2ur.x, 'YData', lineCoords.lr2ur.y)
-set(rectangleS.ul2ur, 'XData', lineCoords.ul2ur.x, 'YData', lineCoords.ul2ur.y)
-set(rectangleS.hLabel, 'Position', [mean(lineCoords.ul2ur.x), mean(lineCoords.ul2ur.y), 0])
+[lineCoords, extent, ~, ~] = shoulderGui_getRectangleLineCoords(x0, y0, x1, y1, rectangle.angle);
+for ii = 1:numel(lineCoords)
+    set(rectangle.lines(ii), 'XData', lineCoords(ii).x, 'YData', lineCoords(ii).y)
+end
+
+setAppData(fig, extent, 'rectangle.extent')
 
 drawnow
 
@@ -1167,15 +1134,13 @@ set(fig, 'WindowButtonUpFcn', '')
 try
     appData = getAppData(fig);
     set(appData.rectangle.activePoint, 'MarkerFaceColor', ...
-        shoulderGui_getDrawPrp(appData, 'pointMarkerFaceColor'))
+        appData.rectanglePrps.point.markerFaceColor)
     appData.rectangle.activePoint = '';
     
     setAppData(fig, appData)
     
-    rectangleS = shoulderGui_getActiveRectangle(fig);
-    set(rectangleS.ll, 'ButtonDownFcn', @shoulderGui_rectangleCornerCB)
-    set(rectangleS.ur, 'ButtonDownFcn', @shoulderGui_rectangleCornerCB)
-    set(fig, 'WindowKeyPressFcn', @shoulderGui_rectangleKeyPressAddSub)
+    set(appData.rectangle.points(1), 'ButtonDownFcn', @shoulderGui_rectangleCornerCB)
+    set(appData.rectangle.points(2), 'ButtonDownFcn', @shoulderGui_rectangleCornerCB)
 catch
 end
 
@@ -1186,7 +1151,6 @@ end  % #rectangleButtonUpCB
 function shoulderGui_rectangleCornerCB(h, evd)
 
 fig = hfigure(h);
-shoulderGui_setActiveRectangle(fig, h)
 if evd.Button == 3
     shoulderGui_changeAngle(fig)
     return
@@ -1197,69 +1161,23 @@ appData.rectangle.activePoint = h;
 setAppData(fig, appData)
 
 set(appData.rectangle.activePoint, 'MarkerFaceColor', ...
-    shoulderGui_getDrawPrp(appData, 'pointMarkerFaceColorSelected'))
+    appData.rectanglePrps.point.markerFaceColorSelected)
 
-rectangleS = shoulderGui_getActiveRectangle(fig);
-set(rectangleS.ll, 'ButtonDownFcn', '')
-set(rectangleS.ur, 'ButtonDownFcn', '')
+set(appData.rectangle.points(1), 'ButtonDownFcn', '')
+set(appData.rectangle.points(2), 'ButtonDownFcn', '')
 
 set(fig, 'WindowButtonMotionFcn', {@shoulderGui_rectangleButtonMotionCB, fig})
 set(fig, 'WindowButtonUpFcn', {@shoulderGui_rectangleButtonUpCB, fig})
-set(fig, 'WindowKeyPressFcn', @shoulderGui_rectangleKeyPressButtonDown)
 drawnow
 
 end  % #rectangleCornerCB
-%__________________________________________________________
-%% #rectangleKeyPressButtonDown
-%
-function shoulderGui_rectangleKeyPressButtonDown(h, evd)
-
-if ~strcmpi(evd.Key, 'delete')
-    return
-end
-
-fig = hfigure(h);
-
-shoulderGui_clearRectangle(fig);
-
-appData = getAppData(fig);
-if appData.curRectangleID == 1
-    set(appData.rectangle.ll, 'ButtonDownFcn', @shoulderGui_rectangleCornerCB)
-    set(appData.rectangle.ur, 'ButtonDownFcn', @shoulderGui_rectangleCornerCB)
-else
-    set(appData.img, 'ButtonDownFcn', @shoulderGui_rectangleButtonDownCB)
-end
-
-set(fig, 'WindowButtonMotionFcn', '')
-set(fig, 'WindowButtonUpFcn', '')
-set(fig, 'WindowKeyPressFcn', '')
-
-end  % #rectangleKeyPressButtonDown
-%__________________________________________________________
-%% #rectangleKeyPressAddSub
-%
-function shoulderGui_rectangleKeyPressAddSub(h, evd)
-
-if ~(strcmpi(evd.Key, 'a') && any(strcmpi(evd.Modifier, 'shift')))
-    return
-end
-
-fig = hfigure(h);
-appData = getAppData(fig);
-
-set(appData.rectangle.ll, 'ButtonDownFcn', '')
-set(appData.rectangle.ur, 'ButtonDownFcn', '')
-
-set(appData.img, 'ButtonDownFcn', @shoulderGui_rectangleButtonDownCB)
-
-end  % #rectangleKeyPressAddSub
 %__________________________________________________________
 %% #changeAngle
 %
 function shoulderGui_changeAngle(fig)
 
-rectangleS = shoulderGui_getActiveRectangle(fig);
-curAngle = rectangleS.angle;
+rectangle = getAppData(fig, 'rectangle');
+curAngle = rectangle.angle;
 answer = inputdlg({'Rectangle angle [degrees]:'},'Rectangle angle', [1, 35], {num2str(curAngle)});
 if isempty(answer)
     return
@@ -1284,255 +1202,156 @@ if newAngle == curAngle
     return
 end
 
-rectangleS.angle = newAngle;
-shoulderGui_setActiveRectangleData(rectangleS, fig)
+rectangle.angle = newAngle;
 
-x0 = get(rectangleS.ll, 'XData');
-y0 = get(rectangleS.ll, 'YData');
-x1 = get(rectangleS.ur, 'XData');
-y1 = get(rectangleS.ur, 'YData');
+x0 = get(rectangle.points(1), 'XData');
+y0 = get(rectangle.points(1), 'YData');
+x1 = get(rectangle.points(2), 'XData');
+y1 = get(rectangle.points(2), 'YData');
 
-lineCoords = shoulderGui_getRectangleLineCoords(x0, y0, x1, y1, newAngle);
-set(rectangleS.ll2ul, 'XData', lineCoords.ll2ul.x, 'YData', lineCoords.ll2ul.y)
-set(rectangleS.ll2lr, 'XData', lineCoords.ll2lr.x, 'YData', lineCoords.ll2lr.y)
-set(rectangleS.lr2ur, 'XData', lineCoords.lr2ur.x, 'YData', lineCoords.lr2ur.y)
-set(rectangleS.ul2ur, 'XData', lineCoords.ul2ur.x, 'YData', lineCoords.ul2ur.y)
-set(rectangleS.ur, 'XData', lineCoords.ur.x, 'YData', lineCoords.ur.y)
+[lineCoords, extent, x1, y1] = shoulderGui_getRectangleLineCoords(x0, y0, x1, y1, newAngle);
 
-set(rectangleS.hLabel, 'Position', [mean(lineCoords.ul2ur.x), mean(lineCoords.ul2ur.y), 0])
-set(rectangleS.hLabel, 'Rotation', -newAngle)
+for ii = 1:numel(lineCoords)
+    set(rectangle.lines(ii), 'XData', lineCoords(ii).x, 'YData', lineCoords(ii).y)
+end
+set(rectangle.points(2), 'XData', x1, 'YData', y1)
+
+rectangle.extent = extent;
+setAppData(fig, rectangle, 'rectangle')
 
 end  % #changeAngle
-%__________________________________________________________
-%% #clearRectangle
-%
-function shoulderGui_clearRectangle(fig)
-
-if isempty(getAppData(fig, 'rectangle'))
-    return
-end
-
-rectangleS = shoulderGui_getActiveRectangle(fig, '-doDelete');
-
-delete([rectangleS.ll2ul, rectangleS.ll2lr,...
-    rectangleS.lr2ur, rectangleS.ul2ur,...
-    rectangleS.ll, rectangleS.ur, rectangleS.hLabel])
-
-curID = getAppData(fig, 'curRectangleID');
-if curID == 1
-    newID = 0;
-else
-    subs = getAppData(fig, 'rectangle.subs');
-    newID = numel(subs) + 1;
-end
-setAppData(fig, newID,'curRectangleID');
-
-drawnow
-
-end  % #clearRectangle
 %__________________________________________________________
 %% #rectangleCornersSwitch
 %
 function shoulderGui_rectangleCornersSwitch(appData, doShow)
 
-rectangles = cell(1+numel(appData.rectangle.subs),1);
-rectangles{1} = appData.rectangle;
-for ii = 1:numel(appData.rectangle.subs)
-    rectangles{ii+1} = appData.rectangle.subs(ii);
-end % for ii
+rectangle = appData.rectangle;
+if doShow
+    set(rectangle.points(1), 'ButtonDownFcn', @shoulderGui_rectangleCornerCB)
+    set(rectangle.points(2), 'ButtonDownFcn', @shoulderGui_rectangleCornerCB)
+    set(rectangle.points(1), 'Marker', appData.rectanglePrps.point.marker)
+    set(rectangle.points(2), 'Marker', appData.rectanglePrps.point.marker)
+    uistack(rectangle.points(1), 'top')
+    uistack(rectangle.points(2), 'top')
+else
+    set(rectangle.points(1), 'Marker', 'none')
+    set(rectangle.points(2), 'Marker', 'none')
+    set(rectangle.points(1), 'ButtonDownFcn', '')
+    set(rectangle.points(2), 'ButtonDownFcn', '')
+end
 
-for ii = 1:numel(rectangles)
-    if doShow
-        if numel(rectangles) == 1 || ii > 1
-            set(rectangles{ii}.ll, 'ButtonDownFcn', @shoulderGui_rectangleCornerCB)
-            set(rectangles{ii}.ur, 'ButtonDownFcn', @shoulderGui_rectangleCornerCB)
-        end
-        set(rectangles{ii}.ll, 'Marker', shoulderGui_getDrawPrp(appData, 'pointMarker'))
-        set(rectangles{ii}.ur, 'Marker', shoulderGui_getDrawPrp(appData, 'pointMarker'))
-        uistack(rectangles{ii}.ll, 'top')
-        uistack(rectangles{ii}.ur, 'top')
-    else
-        set(rectangles{ii}.ll, 'Marker', 'none')
-        set(rectangles{ii}.ur, 'Marker', 'none')
-        set(rectangles{ii}.ll, 'ButtonDownFcn', '')
-        set(rectangles{ii}.ur, 'ButtonDownFcn', '')
-    end
-end % for ii
-
-end  % #checkRectangle
+end  % #rectangleCornersSwitch
 %__________________________________________________________
 %% #drawRectangle
 %
-function shoulderGui_drawRectangle(fig, x0, y0, x1, y1, angle, label, varargin)
+function shoulderGui_drawRectangle(fig, x0, y0, x1, y1, angle, varargin)
 
 appData = getAppData(fig);
 
-rectangleS = struct;
+appData.rectangle = struct('lines', [], 'points', [], 'angle', [], 'extent', []);
 
 if ~isempty(varargin) && isstruct(varargin{1})
     lineCoords = varargin{1};
+    extent = varargin{2};
+    x1 = varargin{3};
+    y1 = varargin{4};
 else
-    lineCoords = shoulderGui_getRectangleLineCoords(x0, y0, x1, y1, angle);
+    [lineCoords, extent, x1, y1] = shoulderGui_getRectangleLineCoords(x0, y0, x1, y1, angle);
 end
 
 lnPrp           = struct;
 lnPrp.Parent    = appData.ax;
-lnPrp.LineWidth = shoulderGui_getDrawPrp(appData, 'lineWidth');
-lnPrp.Color     = shoulderGui_getDrawPrp(appData, 'lineColor');
-lnPrp.lineStyle = shoulderGui_getDrawPrp(appData, 'lineStyle');
+lnPrp.LineWidth = appData.rectanglePrps.line.width;
+lnPrp.Color     = appData.rectanglePrps.line.color;
+lnPrp.lineStyle = appData.rectanglePrps.line.lineStyle;
 
-lnPrp.XData     = lineCoords.ll2ul.x;
-lnPrp.YData     = lineCoords.ll2ul.y;
-rectangleS.ll2ul = line(lnPrp);
-
-lnPrp.XData     = lineCoords.ll2lr.x;
-lnPrp.YData     = lineCoords.ll2lr.y;
-rectangleS.ll2lr = line(lnPrp);
-
-lnPrp.XData     = lineCoords.lr2ur.x;
-lnPrp.YData     = lineCoords.lr2ur.y;
-rectangleS.lr2ur = line(lnPrp);
-
-lnPrp.XData     = lineCoords.ul2ur.x;
-lnPrp.YData     = lineCoords.ul2ur.y;
-rectangleS.ul2ur = line(lnPrp);
+for ii = 1:numel(lineCoords)
+    lnPrp.XData     = lineCoords(ii).x;
+    lnPrp.YData     = lineCoords(ii).y;
+    appData.rectangle.lines(ii) = line(lnPrp);
+end
 
 pointPrp0 = struct;
 pointPrp0.Parent             = appData.ax;
-pointPrp0.Marker             = shoulderGui_getDrawPrp(appData, 'pointMarker');
-pointPrp0.MarkerSize         = shoulderGui_getDrawPrp(appData, 'pointMarkerSize');
-pointPrp0.MarkerEdgeColor    = shoulderGui_getDrawPrp(appData, 'pointMarkerEdgeColor');
-pointPrp0.MarkerFaceColor    = shoulderGui_getDrawPrp(appData, 'pointMarkerFaceColor');
+pointPrp0.Marker             = appData.rectanglePrps.point.marker;
+pointPrp0.MarkerSize         = appData.rectanglePrps.point.markerSize;
+pointPrp0.MarkerEdgeColor    = appData.rectanglePrps.point.markerEdgeColor;
+pointPrp0.MarkerFaceColor    = appData.rectanglePrps.point.markerFaceColor;
 
 pointPrp        = pointPrp0;
 pointPrp.XData  = x0;
 pointPrp.YData  = y0;
-rectangleS.ll = line(pointPrp);
+appData.rectangle.points(1) = line(pointPrp);
 
 pointPrp        = pointPrp0;
-pointPrp.XData  = lineCoords.ur.x;
-pointPrp.YData  = lineCoords.ur.y;
-rectangleS.ur = line(pointPrp);
+pointPrp.XData  = x1;
+pointPrp.YData  = y1;
+appData.rectangle.points(2) = line(pointPrp);
 
-textPrp           = struct;
-textPrp.Parent    = appData.ax;
-textPrp.Color     = [206, 130, 0]/255;
-textPrp.String    = label;
-textPrp.FontSize  = 18;
-textPrp.Position  = [mean(lineCoords.ul2ur.x), mean(lineCoords.ul2ur.y),0];
-textPrp.Rotation  = -angle;
-textPrp.HorizontalAlignment = 'center';
-textPrp.VerticalAlignment = 'bottom';
+appData.rectangle.angle = angle;
+appData.rectangle.extent = extent;
 
-rectangleS.hLabel = text(textPrp);
-
-rectangleS.angle = angle;
-rectangleS.label = label;
-
-shoulderGui_setActiveRectangleData(rectangleS, fig)
+setAppData(fig, appData)
 
 end  % #drawRectangle
 %__________________________________________________________
-%% #getDrawPrp
-%
-function value = shoulderGui_getDrawPrp(appData, name)
-
-if appData.curRectangleID == 1
-    prpStruct = appData.rectanglePrps.main;
-    isSub = false;
-else
-    prpStruct = appData.rectanglePrps.sub;
-    isSub = true;
-end
-
-switch name
-    case 'lineStyle'
-        if isSub
-            ind = mod(appData.curRectangleID-1,numel(prpStruct.line.styles));
-            if ind == 0
-                ind = numel(prpStruct.line.styles);
-            end
-            value = prpStruct.line.styles{ind};
-        else
-            value = '-';
-        end
-    case 'lineWidth'
-        value = prpStruct.line.width;
-    case 'lineColor'
-        if isSub
-            ind = mod(appData.curRectangleID-1,size(prpStruct.line.colors,1));
-            if ind == 0
-                ind = size(prpStruct.line.colors,1);
-            end
-            value = prpStruct.line.colors(ind,:);
-        else
-            value = prpStruct.line.color;
-        end
-    case 'pointMarker'
-        value = prpStruct.point.marker;
-    case 'pointMarkerSize'
-        value =prpStruct.point.markerSize;
-    case 'pointMarkerEdgeColor'
-        value = prpStruct.point.markerEdgeColor;
-    case 'pointMarkerFaceColor'
-        value = prpStruct.point.markerFaceColor;
-    case 'pointMarkerFaceColorSelected'
-        value = prpStruct.point.markerFaceColorSelected;
-    otherwise
-        error('.')
-end % switch
-
-end  % #getDrawPrp
-%__________________________________________________________
 %% #getRectangleLineCoords
 %
-function lineCoords = shoulderGui_getRectangleLineCoords(x0, y0, x1, y1, angle)
+function [lineCoords, extent, x1, y1] = shoulderGui_getRectangleLineCoords(x0, y0, x1, y1, angle)
 
 % angle is always between (-45, +45) degrees
 
-lineCoords = struct('ll2ul', struct, 'll2lr', struct, 'lr2ur', struct, 'ul2ur', struct);
+lineCoords = struct('x', {}, 'y', {});
+extent = struct('xMin', [], 'xMax', [], 'yMin', [], 'yMax', []);
 
 if angle == 0
-    lineCoords.ll2ul.x = [1,1]*x0;
-    lineCoords.ll2ul.y = [y0,y1];
+    lineCoords(1).x = [1,1]*x0;
+    lineCoords(1).y = [y0,y1];
     
-    lineCoords.ll2lr.x = [x0,x1];
-    lineCoords.ll2lr.y = [1,1]*y0;
+    lineCoords(2).x = [x0,x1];
+    lineCoords(2).y = [1,1]*y0;
     
-    lineCoords.lr2ur.x = [1,1]*x1;
-    lineCoords.lr2ur.y = [y0,y1];
+    lineCoords(3).x = [1,1]*x1;
+    lineCoords(3).y = [y0,y1];
     
-    lineCoords.ul2ur.x = [x0,x1];
-    lineCoords.ul2ur.y = [1,1]*y1;
+    lineCoords(4).x = [x0,x1];
+    lineCoords(4).y = [1,1]*y1;
     
-    lineCoords.ur.x = x1;
-    lineCoords.ur.y = y1;
+    extent.xMin = min(x0, x1);
+    extent.xMax = max(x0, x1);
+    extent.yMin = min(y0, y1);
+    extent.yMax = max(y0, y1);
 else
     R = [cosd(angle), -sind(angle);sind(angle), cosd(angle)];
-    llNorm = [0; 0];
-    lrNorm = [x1 - x0; 0];
-    ulNorm = [0; y1 - y0];
-    urNorm = [x1 - x0; y1 - y0];
+    xy0Norm = [0; 0];
+    xy1Norm = [x1 - x0; y1 - y0];
+    xy2Norm = [x1 - x0; 0];
+    xy3Norm = [0; y1 - y0];
+
+    xy0Rot = R*xy0Norm + [x0; y0];
+    xy1Rot = R*xy1Norm + [x0; y0];
+    xy2Rot = R*xy2Norm + [x0; y0];
+    xy3Rot = R*xy3Norm + [x0; y0];
     
-    llRot = R*llNorm + [x0; y0];
-    lrRot = R*lrNorm + [x0; y0];
-    ulRot = R*ulNorm + [x0; y0];
-    urRot = R*urNorm + [x0; y0];
+    lineCoords(1).x = [xy0Rot(1),xy3Rot(1)];
+    lineCoords(1).y = [xy0Rot(2),xy3Rot(2)];
     
-    lineCoords.ll2ul.x = [llRot(1),ulRot(1)];
-    lineCoords.ll2ul.y = [llRot(2),ulRot(2)];
+    lineCoords(2).x = [xy0Rot(1),xy2Rot(1)];
+    lineCoords(2).y = [xy0Rot(2),xy2Rot(2)];
     
-    lineCoords.ll2lr.x = [llRot(1),lrRot(1)];
-    lineCoords.ll2lr.y = [llRot(2),lrRot(2)];
+    lineCoords(3).x = [xy2Rot(1),xy1Rot(1)];
+    lineCoords(3).y = [xy2Rot(2),xy1Rot(2)];
     
-    lineCoords.lr2ur.x = [lrRot(1),urRot(1)];
-    lineCoords.lr2ur.y = [lrRot(2),urRot(2)];
+    lineCoords(4).x = [xy3Rot(1),xy1Rot(1)];
+    lineCoords(4).y = [xy3Rot(2),xy1Rot(2)];
     
-    lineCoords.ul2ur.x = [ulRot(1),urRot(1)];
-    lineCoords.ul2ur.y = [ulRot(2),urRot(2)];
-    
-    lineCoords.ur.x = urRot(1);
-    lineCoords.ur.y = urRot(2);
+    extent.xMin = min([xy0Rot(1), xy2Rot(1), xy3Rot(1), xy1Rot(1)]);
+    extent.xMax = max([xy0Rot(1), xy2Rot(1), xy3Rot(1), xy1Rot(1)]);
+    extent.yMin = min([xy0Rot(2), xy2Rot(2), xy3Rot(2), xy1Rot(2)]);
+    extent.yMax = max([xy0Rot(2), xy2Rot(2), xy3Rot(2), xy1Rot(2)]);
+
+    x1 = xy1Rot(1);
+    y1 = xy1Rot(2);
 end
 
 end  % #getRectangleLineCoords
@@ -1654,7 +1473,7 @@ if evd.Button == 1
     set(fig, 'WindowButtonUpFcn', {@shoulderGui_endMoveShoulderPoint, fig, h})
 elseif evd.Button == 3
     appData = getAppData(fig);
-    %    right click == remove point (and the connected point and ocnnecting line)
+    %    right click == remove point (and the connected point and connecting line)
     if h == appData.lastCreatedPoint
         appData.nextIsSecondPoint = false;
         appData.lastCreatedPoint = '';
@@ -1823,6 +1642,11 @@ for ii = 1:numel(points)
     end
 end % for ii
 
+if numel(points) > 0 && appData.analysisStepInd > appData.lastStepWithProcessedData
+    appData.lastStepWithProcessedData = appData.analysisStepInd;
+
+end
+
 appData.groups(groupInd).shoulders{dataInd,3} = pointData;
 
 end  % #addPointsToData
@@ -1958,6 +1782,9 @@ else
     if ~succes
         return
     end
+    if isfile(filename)
+        delete(filename)
+    end
     appData.dataFilename = filename;
 end
 
@@ -1993,22 +1820,12 @@ switch field
         appData.dataFile.video = videoSaveData;
     case 'interval'
         appData.dataFile.analysisStepCount = appData.analysisStepCount;
-        appData.dataFile.interval = appData.interval;
+        appData.dataFile.interval = appData.interval;        
     case 'rectangle'
-        rectangleSaveData = struct;
-        rectangleSaveData.main = shoulderGui_getRectangleSaveData(appData.rectangle);
-        if isfield(appData.rectangle, 'subs') && numel(appData.rectangle.subs)
-            subs = shoulderGui_getRectangleSaveData(appData.rectangle.subs(1));
-            for ii = 2:numel(appData.rectangle.subs)
-                subs(ii) = shoulderGui_getRectangleSaveData(appData.rectangle.subs(ii));
-            end % for ii
-        else
-            subs = struct([]);
-        end        
-        rectangleSaveData.subs = subs;        
-        appData.dataFile.rectangle = rectangleSaveData;
+        appData.dataFile.rectangle = shoulderGui_getRectangleSaveData(appData.rectangle);
     case 'groups'
         appData.dataFile.groups = appData.groups;
+        appData.dataFile.lastStepWithProcessedData = appData.lastStepWithProcessedData;
     otherwise
         error('Unknown field: %s', field)
 end
@@ -2019,31 +1836,28 @@ end  % #saveData2file
 %
 function saveData = shoulderGui_getRectangleSaveData(rectangleData)
 
-lineFields = {'ll2ul', 'll2lr', 'lr2ur', 'ul2ur', 'll', 'ur'};
-
 if isempty(rectangleData)
     saveData = '';
     return
 end
 
 saveData = struct;
-if ~isfield(rectangleData, 'label')
-    saveData.label = 'Main';
-else
-    saveData.label = rectangleData.label;
-end
-if ~isfield(rectangleData, 'label')
-    saveData.angle = 0;
-else
-    saveData.angle = rectangleData.angle;
-end
+saveData.angle = rectangleData.angle;
+saveData.extent = rectangleData.extent;
 
-for ii = 1:numel(lineFields)
-    geomData = struct('x', [], 'y', []);
-    geomData.x = get(rectangleData.(lineFields{ii}), 'XData');
-    geomData.y = get(rectangleData.(lineFields{ii}), 'YData');
-    saveData.(lineFields{ii}) = geomData;    
+lines = struct('x', {}, 'y', {});
+for ii = 1:numel(rectangleData.lines)
+    lines(ii).x = get(rectangleData.lines(ii), 'XData');
+    lines(ii).y = get(rectangleData.lines(ii), 'YData');    
 end % for ii
+saveData.lines = lines;    
+
+points = struct('x', {}, 'y', {});
+for ii = 1:numel(rectangleData.points)
+    points(ii).x = get(rectangleData.points(ii), 'XData');
+    points(ii).y = get(rectangleData.points(ii), 'YData');    
+end % for ii
+saveData.points = points;    
 
 end  % #getRectangleSaveData
 %__________________________________________________________
@@ -2104,116 +1918,6 @@ end % for ii
 save(filename, '-struct', 'data')
 
 end  % #convertToFrameNr
-%__________________________________________________________
-%% #setActiveRectangle
-%
-function shoulderGui_setActiveRectangle(fig, hCorner)
-
-rectangle = getAppData(fig, 'rectangle');
-if hCorner == rectangle.ll || hCorner == rectangle.ur
-    newID = 1;
-else
-    for ii = 1:numel(rectangle.subs)
-        if hCorner == rectangle.subs(ii).ll || hCorner == rectangle.subs(ii).ur
-            newID = 1 + ii;
-            break
-        end
-    end % for ii
-end
-setAppData(fig, newID , 'curRectangleID');
-
-end  % #setActiveRectangle
-%__________________________________________________________
-%% #getActiveRectangle
-%
-function rectangleS = shoulderGui_getActiveRectangle(fig, varargin)
-
-if any(strcmpi(varargin, '-doDelete'))
-    doDelete = true;
-else
-    doDelete = false;
-end
-
-curID = getAppData(fig, 'curRectangleID');
-rectangle = getAppData(fig, 'rectangle');
-
-if curID == 1
-    rectangleS = rectangle;
-else
-    rectangleS = rectangle.subs(curID-1);
-end
-
-if doDelete
-    if curID == 1
-        setAppData(fig, '', 'rectangle');
-        return
-    else
-        if numel(rectangle.subs) == 1
-            setAppData(fig, struct([]), 'rectangle.subs');
-            toDelete = 1;
-            toLower = [];
-        else
-            for ii = curID-1:numel(rectangle.subs)
-                rectangle.subs(ii).label = char(64 + ii - 1);
-                set(rectangle.subs(ii).hLabel, 'String', rectangle.subs(ii).label)
-            end % for ii
-            rectangle.subs(curID-1) = [];
-            setAppData(fig, rectangle, 'rectangle');
-            toDelete = curID-1;
-            toLower = curID:numel(rectangle.subs);
-        end
-    end
-    groups = getAppData(fig, 'groups');
-    for jj = 1:2
-        if isempty(groups(jj).shoulders)
-            continue
-        end
-        for kk = 1:size(groups(jj).shoulders,1)
-            if isempty(groups(jj).shoulders{kk,3})
-                continue
-            end
-            pointData = groups(jj).shoulders{kk,3};
-            pointData(pointData(:,5) == toDelete, 5) = NaN;
-            for ii = numel(toLower)
-                pointData(pointData(:,5) == toLower(ii), 5) = pointData(pointData(:,5) == toLower(ii), 5) - 1;
-            end % for ii
-            groups(jj).shoulders{kk,3} = pointData;
-        end % for kk
-    end % for jj
-    setAppData(fig, groups, 'groups');
-end
-
-end  % #getActiveRectangle
-%__________________________________________________________
-%% #setActiveRectangleData
-%
-function shoulderGui_setActiveRectangleData(rectangleS, fig)
-
-curID = getAppData(fig, 'curRectangleID');
-rectangle = getAppData(fig, 'rectangle');
-
-if curID == 1
-    fldNms = fieldnames(rectangleS);
-    for ii = 1:numel(fldNms)
-        rectangle.(fldNms{ii}) = rectangleS.(fldNms{ii});
-    end % for ii
-    if ~isfield(rectangle, 'subs')
-        rectangle.subs = struct([]);
-    end
-    if ~isfield(rectangle, 'activePoint')
-        rectangle.activePoint = '';
-    end
-else
-    if numel(rectangle.subs)
-        rectangle.subs(curID-1) = rectangleS;
-    else
-        rectangle.subs = rectangleS;
-    end
-end
-
-setAppData(fig, rectangle, 'rectangle');
-
-end  % #setActiveRectangleData
 %__________________________________________________________
 %% #addRectangleFromData
 %
