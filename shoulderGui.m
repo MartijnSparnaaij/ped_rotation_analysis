@@ -442,13 +442,7 @@ switch appData.majorStepInd
         end
         shoulderGui_saveData2file(appData, 'rectangle');
         shoulderGui_rectangleCornersSwitch(appData, false)
-        appData.orgImgAxLimit = [get(appData.ax, 'XLim'), get(appData.ax, 'YLim')];
-        buffer = 50;
-        xLim = [max(appData.rectangle.extent.xMin - buffer,  appData.orgImgAxLimit(1)), min(appData.rectangle.extent.xMax + buffer, appData.orgImgAxLimit(2))];
-        yLim = [max(appData.rectangle.extent.yMin - buffer,  appData.orgImgAxLimit(3)), min(appData.rectangle.extent.yMax + buffer, appData.orgImgAxLimit(4))];
-        set(appData.ax, 'XLim', xLim)
-        set(appData.ax, 'YLim', yLim)
-        drawnow
+        appData = shoulderGui_zoomAxes(appData);
         appData.majorStepInd = appData.majorStepInd + 1;
     case 3 % Set interval
         [ok, interval] = shoulderGui_getInterval(appData);
@@ -725,7 +719,7 @@ switch appData.majorStepInd
         uiPrp.String    = 'Load video';
         uiPrp.FontSize  = 11;
         uiPrp.Position  = [9, 9, 85, 25];
-        uiPrp.Callback  = @shoulderGui_loadVideo;
+        uiPrp.Callback  = @shoulderGui_loadVideoCB;
         uicontrol(uiPrp)
     case 3 % Set interval
         pnlData.interval = getAppData(fig, 'interval');
@@ -788,9 +782,9 @@ shoulderGui_resize(fig, '')
 
 end  % #updateImagePanel
 %__________________________________________________________
-%% #loadVideo
+%% #loadVideoCB
 %
-function videoData = shoulderGui_loadVideo(h, ~)
+function videoData = shoulderGui_loadVideoCB(h, ~)
 
 dataPd = fullfile(cd, 'data', 'input');
 if ~isfolder(dataPd)
@@ -801,6 +795,18 @@ end
 if file == 0
     return
 end
+
+fig = hfigure(h);
+videoData = shoulderGui_loadVideo(fig, path, file);
+
+setAppData(fig, videoData, 'videoData')
+shoulderGui_initAxImage(fig)
+
+end % #loadVideoCB
+%__________________________________________________________
+%% #loadVideo
+%
+function videoData = shoulderGui_loadVideo(fig, path, file)
 
 videoData = struct;
 videoData.flNm = fullfile(path, file);
@@ -813,12 +819,8 @@ catch
     return
 end
 
-fig = hfigure(h);
 videoFlNmLabel = getAppData(getAppData(fig, 'ctrlPnl'), 'videoFlNmLabel');
 set(videoFlNmLabel, 'String', file)
-
-setAppData(fig, videoData, 'videoData')
-shoulderGui_initAxImage(fig)
 
 end  % #loadVideo
 %__________________________________________________________
@@ -831,12 +833,20 @@ if ~isfolder(dataPd)
     dataPd = cd;
 end
 
-[file, path] = uigetfile({'*.mp4';'*.mat'}, 'Select movie', dataPd);
+[file, path] = uigetfile({'*.mat'}, 'Select data file', dataPd);
 if file == 0
     return
 end
 
 filename = fullfile(path, file);
+[pd, fl, ~] = fileparts(filename);
+backupFlNm = filename;
+backupInd = 1;
+while isfile(backupFlNm)
+    backupFlNm = fullfile(pd, sprintf('%s_%02d.bak', fl, backupInd));
+    backupInd = backupInd + 1;
+end % while
+copyfile(filename, backupFlNm, 'f');
 data = load(filename);
 
 fig = hfigure(h);
@@ -848,7 +858,7 @@ else
     [~, fl, ext] = fileparts(data.video.filename);
     pd = path;
 end
-videoData = shoulderGui_loadVideo(pd, [fl, ext]);
+videoData = shoulderGui_loadVideo(fig, pd, [fl, ext]);
 appData.videoData = videoData;
 appData.interval = data.interval;
 
@@ -859,16 +869,9 @@ appData.analysisStepCount = data.analysisStepCount;
 appData.stepInd2dataInd = 1:data.analysisStepCount;
 setAppData(fig, appData)
 
-setAppData(fig, 1, 'curRectangleID')
-shoulderGui_addRectangleFromData(fig, data.rectangle.main)
-for ii = 1:numel(data.rectangle.subs)
-    setAppData(fig, 1 + ii, 'curRectangleID')
-    shoulderGui_addRectangleFromData(fig, data.rectangle.subs(ii))
-end % for ii
-
+shoulderGui_addRectangleFromData(fig, data.rectangle)
 appData = getAppData(fig);
 shoulderGui_rectangleCornersSwitch(appData, false)
-
 
 for ii = 1:numel(data.groups)
     appData.groups(ii) = data.groups(ii);
@@ -891,6 +894,7 @@ end
 appData.majorStepInd = 4;
 appData = shoulderGui_setAxImage(appData, 1);
 appData.dataFilename = filename;
+appData = shoulderGui_zoomAxes(appData);
 [~, appData] = shoulderGui_initSaveFile(appData);
 setAppData(fig, appData)
 
@@ -1253,8 +1257,6 @@ appData.rectangle = struct('lines', [], 'points', [], 'angle', [], 'extent', [])
 if ~isempty(varargin) && isstruct(varargin{1})
     lineCoords = varargin{1};
     extent = varargin{2};
-    x1 = varargin{3};
-    y1 = varargin{4};
 else
     [lineCoords, extent, x1, y1] = shoulderGui_getRectangleLineCoords(x0, y0, x1, y1, angle);
 end
@@ -1923,22 +1925,20 @@ end  % #convertToFrameNr
 %
 function shoulderGui_addRectangleFromData(fig, rectangleS)
 
-x0 = rectangleS.ll.x;
-y0 = rectangleS.ll.y;
-x1 = rectangleS.ur.x;
-y1 = rectangleS.ur.y;
+x0 = rectangleS.points(1).x;
+y0 = rectangleS.points(1).y;
+x1 = rectangleS.points(2).x;
+y1 = rectangleS.points(2).y;
 
 angle = rectangleS.angle;
-label = rectangleS.label;
+extent = rectangleS.extent;
 
-fldNms2omit = {'label', 'angle'};
-fldNms = setdiff(fieldnames(rectangleS), fldNms2omit);
-lineCoords = struct;
-for ii = 1:numel(fldNms)
-    lineCoords.(fldNms{ii}).x = rectangleS.(fldNms{ii}).x;
-    lineCoords.(fldNms{ii}).y = rectangleS.(fldNms{ii}).y;
+lineCoords = struct('x', {}, 'y', {});
+for ii = 1:numel(rectangleS.lines)
+    lineCoords(ii).x = rectangleS.lines(ii).x;
+    lineCoords(ii).y = rectangleS.lines(ii).y;
 end % for ii
-shoulderGui_drawRectangle(fig, x0, y0, x1, y1, angle, label, lineCoords);
+shoulderGui_drawRectangle(fig, x0, y0, x1, y1, angle, lineCoords, extent);
 
 end  % #addRectangleFromData
 %__________________________________________________________
@@ -2045,6 +2045,20 @@ data = load(filename);
 save(filename, '-struct', 'data');
 
 end  % #convertOldMat2new
+%__________________________________________________________
+%% #zoomAxes
+%
+function appData = shoulderGui_zoomAxes(appData)
+
+appData.orgImgAxLimit = [get(appData.ax, 'XLim'), get(appData.ax, 'YLim')];
+buffer = 50;
+xLim = [max(appData.rectangle.extent.xMin - buffer,  appData.orgImgAxLimit(1)), min(appData.rectangle.extent.xMax + buffer, appData.orgImgAxLimit(2))];
+yLim = [max(appData.rectangle.extent.yMin - buffer,  appData.orgImgAxLimit(3)), min(appData.rectangle.extent.yMax + buffer, appData.orgImgAxLimit(4))];
+set(appData.ax, 'XLim', xLim)
+set(appData.ax, 'YLim', yLim)
+drawnow
+
+end  % #zoomAxes
 %__________________________________________________________
 %% #qqq
 %
