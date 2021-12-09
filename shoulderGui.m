@@ -225,7 +225,7 @@ pnlData.secondGroupName = 'shoulderSecondGroup';
 stepsC = {
     %name                     label                       isSubstep
     'loadData'               'Load video'                 false
-    'setDensRectangle'        'Set density rectangle'     false
+    'setDensRectangle'        'Set meas. rectangle'       false
     'setInterval'             'Set interval'              false
     'setGroupNames'           'Set group names'           false
     'performAnalysis'         'Perform analysis'          false
@@ -429,6 +429,7 @@ switch appData.majorStepInd
             end
             shoulderGui_saveData2file(appData, 'videoData');
             appData.majorStepInd = appData.majorStepInd + 1;
+            appData.orgImgAxLimit = [get(appData.ax, 'XLim'), get(appData.ax, 'YLim')];
             set(appData.img, 'ButtonDownFcn', @shoulderGui_rectangleButtonDownCB)
             pnlData = getAppData(getAppData(fig, 'ctrlPnl'));
             set(pnlData.stopButton, 'enable', 'on')
@@ -442,7 +443,7 @@ switch appData.majorStepInd
         end
         shoulderGui_saveData2file(appData, 'rectangle');
         shoulderGui_rectangleCornersSwitch(appData, false)
-        appData = shoulderGui_zoomAxes(appData);
+        shoulderGui_zoomAxes(appData);
         appData.majorStepInd = appData.majorStepInd + 1;
     case 3 % Set interval
         [ok, interval] = shoulderGui_getInterval(appData);
@@ -509,9 +510,7 @@ appData = getAppData(fig);
 
 if appData.majorStepInd == 3
     shoulderGui_rectangleCornersSwitch(appData, true)
-    set(appData.ax, 'XLim', appData.orgImgAxLimit(1:2))
-    set(appData.ax, 'YLim', appData.orgImgAxLimit(3:4))
-    drawnow
+    shoulderGui_resetAxZoom(appData)
     set(fig, 'WindowKeyPressFcn', @shoulderGui_rectangleKeyPressAddSub)
 end
 
@@ -721,6 +720,19 @@ switch appData.majorStepInd
         uiPrp.Position  = [9, 9, 85, 25];
         uiPrp.Callback  = @shoulderGui_loadVideoCB;
         uicontrol(uiPrp)
+    case 2 % Set measurement rectangle
+        pnlPrp.Position = [0,0,100,45];
+        pnlData.overlay = uipanel(pnlPrp);
+        uiPrp           = struct;
+        uiPrp.Parent    = pnlData.overlay;
+        uiPrp.Units     = 'Points';
+        uiPrp.Style     = 'ToggleButton';
+        uiPrp.String    = 'Zoom';
+        uiPrp.FontSize  = 11;
+        uiPrp.Position  = [9, 9, 85, 25];
+        uiPrp.Callback  = @shoulderGui_zoomSwitch;
+        uicontrol(uiPrp)
+
     case 3 % Set interval
         pnlData.interval = getAppData(fig, 'interval');
         pnlPrp.Position = [0,0,140,40];
@@ -894,7 +906,7 @@ end
 appData.majorStepInd = 4;
 appData = shoulderGui_setAxImage(appData, 1);
 appData.dataFilename = filename;
-appData = shoulderGui_zoomAxes(appData);
+shoulderGui_zoomAxes(appData);
 [~, appData] = shoulderGui_initSaveFile(appData);
 setAppData(fig, appData)
 
@@ -1214,6 +1226,7 @@ x1 = get(rectangle.points(2), 'XData');
 y1 = get(rectangle.points(2), 'YData');
 
 [lineCoords, extent, x1, y1] = shoulderGui_getRectangleLineCoords(x0, y0, x1, y1, newAngle);
+[lineCoords, extent, x1, y1] = shoulderGui_checkRectangleInAxLimits(lineCoords, extent, x0, y0, x1, y1, newAngle, fig);
 
 for ii = 1:numel(lineCoords)
     set(rectangle.lines(ii), 'XData', lineCoords(ii).x, 'YData', lineCoords(ii).y)
@@ -1325,21 +1338,19 @@ if angle == 0
     extent.yMax = max(y0, y1);
 else
     R = [cosd(angle), -sind(angle);sind(angle), cosd(angle)];
-    xy0Norm = [0; 0];
     xy1Norm = [x1 - x0; y1 - y0];
     xy2Norm = [x1 - x0; 0];
     xy3Norm = [0; y1 - y0];
 
-    xy0Rot = R*xy0Norm + [x0; y0];
     xy1Rot = R*xy1Norm + [x0; y0];
     xy2Rot = R*xy2Norm + [x0; y0];
     xy3Rot = R*xy3Norm + [x0; y0];
+
+    lineCoords(1).x = [x0,xy3Rot(1)];
+    lineCoords(1).y = [y0,xy3Rot(2)];
     
-    lineCoords(1).x = [xy0Rot(1),xy3Rot(1)];
-    lineCoords(1).y = [xy0Rot(2),xy3Rot(2)];
-    
-    lineCoords(2).x = [xy0Rot(1),xy2Rot(1)];
-    lineCoords(2).y = [xy0Rot(2),xy2Rot(2)];
+    lineCoords(2).x = [x0,xy2Rot(1)];
+    lineCoords(2).y = [y0,xy2Rot(2)];
     
     lineCoords(3).x = [xy2Rot(1),xy1Rot(1)];
     lineCoords(3).y = [xy2Rot(2),xy1Rot(2)];
@@ -1347,16 +1358,90 @@ else
     lineCoords(4).x = [xy3Rot(1),xy1Rot(1)];
     lineCoords(4).y = [xy3Rot(2),xy1Rot(2)];
     
-    extent.xMin = min([xy0Rot(1), xy2Rot(1), xy3Rot(1), xy1Rot(1)]);
-    extent.xMax = max([xy0Rot(1), xy2Rot(1), xy3Rot(1), xy1Rot(1)]);
-    extent.yMin = min([xy0Rot(2), xy2Rot(2), xy3Rot(2), xy1Rot(2)]);
-    extent.yMax = max([xy0Rot(2), xy2Rot(2), xy3Rot(2), xy1Rot(2)]);
+    extent.xMin = min([x0, xy2Rot(1), xy3Rot(1), xy1Rot(1)]);
+    extent.xMax = max([x0, xy2Rot(1), xy3Rot(1), xy1Rot(1)]);
+    extent.yMin = min([y0, xy2Rot(2), xy3Rot(2), xy1Rot(2)]);
+    extent.yMax = max([y0, xy2Rot(2), xy3Rot(2), xy1Rot(2)]);
 
     x1 = xy1Rot(1);
     y1 = xy1Rot(2);
 end
 
 end  % #getRectangleLineCoords
+%__________________________________________________________
+%% #checkRectangleInAxLimits
+%
+function [lineCoords, extent, x1, y1] = shoulderGui_checkRectangleInAxLimits(lineCoords, extent, x0, y0, x1, y1, angle, fig)
+
+ax = getAppData(fig , 'ax');
+axLimits = [get(ax, 'XLim'), get(ax, 'YLim')];
+
+if x1 >= axLimits(1) && x1 <= axLimits(2) && y1 >= axLimits(3) && y1 <= axLimits(4)
+    return
+end
+
+intersectionPoint = nan;
+redFactor = inf;
+
+axLines = [
+    axLimits(1), axLimits(2), axLimits(3), axLimits(3);
+    axLimits(1), axLimits(2), axLimits(4), axLimits(4);
+    axLimits(1), axLimits(1), axLimits(3), axLimits(4);
+    axLimits(2), axLimits(2), axLimits(3), axLimits(4);
+];
+
+for ii = 1:4    
+    [intersectionPoint_ii, redFactor_ii] = getLineIntersectionPoint(x0, y0, x1, y1, axLines(ii,1), axLines(ii,3), axLines(ii,2), axLines(ii,4));
+    if isnan(intersectionPoint_ii)
+        continue
+    end
+
+    if redFactor_ii < redFactor
+        intersectionPoint = intersectionPoint_ii;
+        redFactor = redFactor_ii;
+    end
+end % for ii
+
+if isnan(intersectionPoint)
+    return
+end
+
+x1 = intersectionPoint(1);
+y1 = intersectionPoint(2);
+
+
+R = [cosd(angle), -sind(-angle);sind(-angle), cosd(-angle)];
+xy1Norm = [x1 - x0; y1 - y0];
+xy1Rot = R*xy1Norm + [x0; y0];
+
+[lineCoords, extent, x1, y1] = shoulderGui_getRectangleLineCoords(x0, y0, xy1Rot(1), xy1Rot(2), angle);
+
+end  % #checkRectangleInAxLimits
+%__________________________________________________________
+%% #getLineIntersectionPoint
+%
+function [intersectionPoint, redFactor] = getLineIntersectionPoint(x0, y0, x1, y1, x2, y2, x3, y3)
+% https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
+% Given two points on each line segment
+
+intersectionPoint = nan;
+redFactor = nan;
+
+d = (x0 - x1)*(y2 - y3) - (y0 - y1)*(x2 - x3);
+t = ((x0 - x2)*(y2 - y3) - (y0 - y2)*(x2 - x3))/d;
+u = ((x0 - x2)*(y0 - y1) - (y0 - y2)*(x0 - x1))/d;
+
+if t < 0 || t > 1 || u < 0 || u > 1 
+    return
+end
+
+x1 = x0 + t*(x1 - x0);
+y1 = y0 + t*(y1 - y0);
+
+intersectionPoint = [x1, y1];
+redFactor = t;
+
+end % #getClosestPoint
 %__________________________________________________________
 %% #checkGroupNames
 %
@@ -1875,7 +1960,7 @@ if ~isfolder(dataPd)
     dataPd = cd;
 end
 
-[file, path] = uiputfile('*.mat', 'Choose a file for saving the analysis data', fullfile(dataPd, 'shoulderData.mat'));
+[file, path] = uiputfile('*.mat', 'Choose a file for saving the analysis data', fullfile(dataPd, 'rorationData.mat'));
 if file == 0
     warndlg('A save file must be chosen to continue!', 'Warning', '-modal');
 else
@@ -2046,11 +2131,31 @@ save(filename, '-struct', 'data');
 
 end  % #convertOldMat2new
 %__________________________________________________________
+%% #zoomSwitch
+%
+function shoulderGui_zoomSwitch(h, ~)
+
+fig = hfigure(h);
+appData = getAppData(fig);
+if isempty(appData.rectangle)
+    set(h, 'Value', get(h, 'Min'))
+    return
+end
+
+isSelected = get(h, 'Value') == get(h, 'Max');
+
+if isSelected
+    shoulderGui_zoomAxes(appData)
+else
+    shoulderGui_resetAxZoom(appData)
+end
+
+end  % #zoomSwitch
+%__________________________________________________________
 %% #zoomAxes
 %
-function appData = shoulderGui_zoomAxes(appData)
+function shoulderGui_zoomAxes(appData)
 
-appData.orgImgAxLimit = [get(appData.ax, 'XLim'), get(appData.ax, 'YLim')];
 buffer = 50;
 xLim = [max(appData.rectangle.extent.xMin - buffer,  appData.orgImgAxLimit(1)), min(appData.rectangle.extent.xMax + buffer, appData.orgImgAxLimit(2))];
 yLim = [max(appData.rectangle.extent.yMin - buffer,  appData.orgImgAxLimit(3)), min(appData.rectangle.extent.yMax + buffer, appData.orgImgAxLimit(4))];
@@ -2059,6 +2164,16 @@ set(appData.ax, 'YLim', yLim)
 drawnow
 
 end  % #zoomAxes
+%__________________________________________________________
+%% #resetAxZoom
+%
+function shoulderGui_resetAxZoom(appData)
+
+set(appData.ax, 'XLim', appData.orgImgAxLimit(1:2))
+set(appData.ax, 'YLim', appData.orgImgAxLimit(3:4))
+drawnow
+
+end  % #resetAxZoom
 %__________________________________________________________
 %% #qqq
 %
