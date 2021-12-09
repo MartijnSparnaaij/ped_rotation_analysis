@@ -6,7 +6,7 @@ The Pedestrian Rotation Analysis Tool is a small Matlab based tool that enables 
 
 Start Matlab and set the current directory to directory containing the m-files (i.e. shoulderGui.m etc.). Next run shoulderGui.m, which should show the following window:
 
-![Start screen](images/001 - start_screen.jpg)
+![Start screen](images/001_start_screen.jpg)
 
 The start screen shows two options:
 1. Start a new analysis
@@ -16,42 +16,45 @@ Both options are explained in more detail below.
 
 ### Start new analysis
 
-
-
-
 #### Load video
 
-![Load video](images/002 - load_video.jpg)
+Click the load video button to open a file open dialog and select the video file.
 
-![Video loaded](images/003 - video_loaded.jpg)
+![Load video](images/002_load_video.jpg)
 
-process video data of pedestrians (presuming the video is taken from a bird's-eye perspective)
+After succesfully loading the first frame of the video will be shown. The load another video click the load button again. 
 
-#### Set density rectangle
+![Video loaded](images/003_video_loaded.jpg)
 
-![Set measurement rectangle](images/004 - set_meas_rectangle.jpg)
-![Measurement rectangle set](images/005 - meas_rectangle_set.jpg)
-![Measurement rectangle zoom](images/006 - meas_rectangle_set_zoom.jpg)
+After you have loaded the video, click next and a file dialog will open and ask you to select a file to which you want to save the analysis data. The structure of this output file and which data is saved in it is explained in more detail in the last part of this readme.
+
+#### Set measurement rectangle
+
+Now you have to draw a measurement rectangle by clicking on the picture and dragging the coner point that appears to draw a rectangle.   
+
+![Set measurement rectangle](images/004_set_meas_rectangle.jpg)
+![Measurement rectangle set](images/005_meas_rectangle_set.jpg)
+![Measurement rectangle zoom](images/006_meas_rectangle_set_zoom.jpg)
 
 Next and previous step consequences
 
 #### Set interval
 
-![Set interval](images/007 - set_interval.jpg)
+![Set interval](images/007_set_interval.jpg)
 
 #### Set group names
 
-![Set group names](images/008 - group_names_set.jpg)
-![Group names set](images/009 - set_group_names.jpg)
+![Set group names](images/008_group_names_set.jpg)
+![Group names set](images/009_set_group_names.jpg)
 
 #### Perform analysis
 
-![shoulder marking step 1](images/012 - shoulder_marking_step_1.jpg)
-![shoulder marking step 2](images/013 - shoulder_marking_step_2.jpg)
-![shoulder marking step 3](images/014 - shoulder_marking_step_3.jpg)
-![shoulder marking step 4](images/015 - shoulder_marking_step_4.jpg)
-![shoulder marking step 5](images/016 - shoulder_marking_step_5.jpg)
-![shoulder marking step 6](images/017 - shoulder_marking_step_6.jpg)
+![shoulder marking step 1](images/012_shoulder_marking_step_1.jpg)
+![shoulder marking step 2](images/013_shoulder_marking_step_2.jpg)
+![shoulder marking step 3](images/014_shoulder_marking_step_3.jpg)
+![shoulder marking step 4](images/015_shoulder_marking_step_4.jpg)
+![shoulder marking step 5](images/016_shoulder_marking_step_5.jpg)
+![shoulder marking step 6](images/017_shoulder_marking_step_6.jpg)
 
 ### Continue from existing analysis
 
