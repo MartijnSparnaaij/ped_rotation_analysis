@@ -877,6 +877,7 @@ appData.interval = data.interval;
 setAppData(fig, appData)
 shoulderGui_initAxImage(fig)
 appData = getAppData(fig);
+appData.orgImgAxLimit = [get(appData.ax, 'XLim'), get(appData.ax, 'YLim')];
 appData.analysisStepCount = data.analysisStepCount;
 appData.stepInd2dataInd = 1:data.analysisStepCount;
 setAppData(fig, appData)
@@ -906,6 +907,7 @@ end
 appData.majorStepInd = 4;
 appData = shoulderGui_setAxImage(appData, 1);
 appData.dataFilename = filename;
+
 shoulderGui_zoomAxes(appData);
 [~, appData] = shoulderGui_initSaveFile(appData);
 setAppData(fig, appData)
