@@ -108,14 +108,27 @@ The analysis data is saved to a mat-file whereby the data is a structure with th
 5. rectangle: A structure containing information about the density rectangle used for the analysis.
 6. groups: An array with 2 structures (1 per group) containing the rotation data
 
-The video, rectangle and group structures are explained in more detail below.
+The video, rectangle and group structures are explained in more detail below. All coordinates have the unit of [pixel].
 
 ### Video data structure
 
+The video data structure contains 3 fields:
+1. frameRate: The frame rate of the video in frames per second.
+2. duration: The duration fo the video in seconds.
+3. filename: The full filename of the video file.
+
 ### Rectangle data structure
+
+The video data structure contains 4 fields:
+1. angle: The angle in degrees.
+2. extent: The extent of the rectangle. A structure containing the fields (xMin, xMax, yMin & yMax)
+3. lines: The lines making up the rectangle. A structure array with 4 structures each of which has 2 fields (the x-coordinates an the y-coordinates)
+4. points: The points that mark the opposite corner points of the rectangle. A structure array with 2 structures each of which has 2 fields (the x-coordinate an the y-coordinate)
 
 ### Groups data structure
 
-
+The groups data structure is a structure array with 2 structures each containing the shoulder rotation data per group. Each structure has 2 fields:
+1. name: The group name
+2. shoulders: A cell array whereby every row holds the data for each analysis step. The first column contains the frame number. The seconds column the number of pedestrians which marked shoulders. The third column contains a Nx4 matrix whereby N is the number of pedestrians with marked shoulders (i.e. the number in the second column). The columns of the matrix contain the following data [x-coord left shoulder, y-coord left shoulder, x-coord right shoulder, y-coord right shoulder]
 
 
