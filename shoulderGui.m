@@ -1,17 +1,17 @@
 % Graphical User Interface for annotating shoulders in video data
 %
 % Copyright (c) 2021 Martijn Sparnaaij
-% 
+%
 % Permission is hereby granted, free of charge, to any person obtaining a copy
 % of this software and associated documentation files (the "Software"), to deal
 % in the Software without restriction, including without limitation the rights
 % to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 % copies of the Software, and to permit persons to whom the Software is
 % furnished to do so, subject to the following conditions:
-% 
+%
 % The above copyright notice and this permission notice shall be included in all
 % copies or substantial portions of the Software.
-% 
+%
 % THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 % IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 % FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -485,7 +485,10 @@ switch appData.majorStepInd
             appData.minorStepInd = 1;
             shoulderGui_updateGroupNamesInCtrlPnl(fig, appData.groups)
             if isempty(appData.dataFilename)
-                appData.dataFilename = shoulderGui_chooseSaveFilename();
+                [succes, appData.dataPd, appData.dataFilename] = shoulderGui_chooseSaveFilename();
+                if ~succes
+                    msgbox('No save file selected yet!', 'No save file','modal')
+                end
             end
             shoulderGui_saveData2file(appData, 'groups');
             set(appData.img, 'ButtonDownFcn', @shoulderGui_addShoulderPoint)
@@ -720,12 +723,12 @@ switch appData.majorStepInd
         uiPrp.String    = 'Start new analysis';
         uiPrp.Position  = [9, 43, 115, 25];
         uiPrp.Callback  = @shoulderGui_nextStep;
-        uicontrol(uiPrp)      
+        uicontrol(uiPrp)
 
         uiPrp.String    = 'Continue analysis';
         uiPrp.Position  = [9, 9, 115, 25];
         uiPrp.Callback  = @shoulderGui_loadMat;
-        uicontrol(uiPrp)      
+        uicontrol(uiPrp)
     case 1 % Load video
         pnlPrp.Position = [0,0,100,45];
         pnlData.overlay = uipanel(pnlPrp);
@@ -766,7 +769,7 @@ switch appData.majorStepInd
         uiPrp.FontWeight        = 'bold';
         uiPrp.Position          = [9, 6, 95, 20];
         uicontrol(uiPrp)
-        
+
         uiPrp.Style             = 'edit';
         uiPrp.BackgroundColor   = 'w';
         uiPrp.ForegroundColor   = 'k';
@@ -777,7 +780,7 @@ switch appData.majorStepInd
     case 4
         pnlPrp.Position = [0,0,140,67];
         pnlData.overlay = uipanel(pnlPrp);
-        
+
         uiPrp                   = struct;
         uiPrp.Parent            = pnlData.overlay;
         uiPrp.Units             = 'Points';
@@ -786,19 +789,19 @@ switch appData.majorStepInd
         uiPrp.Style             = 'text';
         uiPrp.FontSize          = 11;
         uiPrp.FontWeight        = 'bold';
-        
+
         uiPrp.String            = 'Group 2:';
         uiPrp.Position          = [9, 6, 50, 20];
         uicontrol(uiPrp)
         uiPrp.String            = 'Group 1:';
         uiPrp.Position          = [9, 33, 50, 20];
         uicontrol(uiPrp)
-        
+
         uiPrp.Style             = 'edit';
         uiPrp.BackgroundColor   = 'w';
         uiPrp.ForegroundColor   = 'k';
         uiPrp.FontWeight        = 'normal';
-        
+
         uiPrp.String            = appData.groups(2).name;
         uiPrp.Position          = [59, 9, 75, 20];
         pnlData.group2Edit      = uicontrol(uiPrp);
@@ -868,27 +871,37 @@ if file == 0
     return
 end
 
-filename = fullfile(path, file);
-[pd, fl, ~] = fileparts(filename);
-backupFlNm = filename;
+dataFlNm = fullfile(path, file);
+[pd, fl, ~] = fileparts(dataFlNm);
+backupFlNm = dataFlNm;
 backupInd = 1;
 while isfile(backupFlNm)
     backupFlNm = fullfile(pd, sprintf('%s_%02d.bak', fl, backupInd));
     backupInd = backupInd + 1;
 end % while
-copyfile(filename, backupFlNm, 'f');
-data = load(filename);
+copyfile(dataFlNm, backupFlNm, 'f');
+data = load(dataFlNm);
 
 fig = hfigure(h);
 appData = getAppData(fig);
 
-if isfile(data.video.filename)
-    [pd, fl, ext] = fileparts(data.video.filename);
+videoPdParts = data.video.pdParts;
+if any(strncmp(videoPdParts, '.', 1))
+    if strcmp(videoPdParts{1}, '.')
+        videoPd = fullfile(pd, videoPdParts{2:end});
+    else
+        stepsUp = sum(strcmp(videoPdParts, '..'));
+        dataPdParts = strsplit(pd, filesep);
+        if isempty(dataPdParts{end})
+            dataPdParts(end) = [];
+        end
+        videoPd = fullfile(dataPdParts{1:end-stepsUp}, videoPdParts{stepsUp+1:end});
+    end
 else
-    [~, fl, ext] = fileparts(data.video.filename);
-    pd = path;
+    videoPd = fullfile(videoPdParts{:});
 end
-videoData = shoulderGui_loadVideo(fig, pd, [fl, ext]);
+
+videoData = shoulderGui_loadVideo(fig, videoPd, data.video.file);
 appData.videoData = videoData;
 appData.interval = data.interval;
 
@@ -924,7 +937,8 @@ end
 
 appData.majorStepInd = 4;
 appData = shoulderGui_setAxImage(appData, 1);
-appData.dataFilename = filename;
+appData.dataFilename = dataFlNm;
+appData.dataPd = dataPd;
 
 shoulderGui_zoomAxes(appData);
 [~, appData] = shoulderGui_initSaveFile(appData);
@@ -1172,9 +1186,9 @@ try
     set(appData.rectangle.activePoint, 'MarkerFaceColor', ...
         appData.rectanglePrps.point.markerFaceColor)
     appData.rectangle.activePoint = '';
-    
+
     setAppData(fig, appData)
-    
+
     set(appData.rectangle.points(1), 'ButtonDownFcn', @shoulderGui_rectangleCornerCB)
     set(appData.rectangle.points(2), 'ButtonDownFcn', @shoulderGui_rectangleCornerCB)
 catch
@@ -1342,16 +1356,16 @@ extent = struct('xMin', [], 'xMax', [], 'yMin', [], 'yMax', []);
 if angle == 0
     lineCoords(1).x = [1,1]*x0;
     lineCoords(1).y = [y0,y1];
-    
+
     lineCoords(2).x = [x0,x1];
     lineCoords(2).y = [1,1]*y0;
-    
+
     lineCoords(3).x = [1,1]*x1;
     lineCoords(3).y = [y0,y1];
-    
+
     lineCoords(4).x = [x0,x1];
     lineCoords(4).y = [1,1]*y1;
-    
+
     extent.xMin = min(x0, x1);
     extent.xMax = max(x0, x1);
     extent.yMin = min(y0, y1);
@@ -1368,16 +1382,16 @@ else
 
     lineCoords(1).x = [x0,xy3Rot(1)];
     lineCoords(1).y = [y0,xy3Rot(2)];
-    
+
     lineCoords(2).x = [x0,xy2Rot(1)];
     lineCoords(2).y = [y0,xy2Rot(2)];
-    
+
     lineCoords(3).x = [xy2Rot(1),xy1Rot(1)];
     lineCoords(3).y = [xy2Rot(2),xy1Rot(2)];
-    
+
     lineCoords(4).x = [xy3Rot(1),xy1Rot(1)];
     lineCoords(4).y = [xy3Rot(2),xy1Rot(2)];
-    
+
     extent.xMin = min([x0, xy2Rot(1), xy3Rot(1), xy1Rot(1)]);
     extent.xMax = max([x0, xy2Rot(1), xy3Rot(1), xy1Rot(1)]);
     extent.yMin = min([y0, xy2Rot(2), xy3Rot(2), xy1Rot(2)]);
@@ -1408,9 +1422,9 @@ axLines = [
     axLimits(1), axLimits(2), axLimits(4), axLimits(4);
     axLimits(1), axLimits(1), axLimits(3), axLimits(4);
     axLimits(2), axLimits(2), axLimits(3), axLimits(4);
-];
+    ];
 
-for ii = 1:4    
+for ii = 1:4
     [intersectionPoint_ii, redFactor_ii] = getLineIntersectionPoint(x0, y0, x1, y1, axLines(ii,1), axLines(ii,3), axLines(ii,2), axLines(ii,4));
     if isnan(intersectionPoint_ii)
         continue
@@ -1451,7 +1465,7 @@ d = (x0 - x1)*(y2 - y3) - (y0 - y1)*(x2 - x3);
 t = ((x0 - x2)*(y2 - y3) - (y0 - y2)*(x2 - x3))/d;
 u = ((x0 - x2)*(y0 - y1) - (y0 - y2)*(x0 - x1))/d;
 
-if t < 0 || t > 1 || u < 0 || u > 1 
+if t < 0 || t > 1 || u < 0 || u > 1
     return
 end
 
@@ -1523,28 +1537,28 @@ if appData.nextIsSecondPoint
     y1 = get(appData.lastCreatedPoint, 'YData');
     x2 = evd.IntersectionPoint(1);
     y2 = evd.IntersectionPoint(2);
-    
+
     % Create connecting line
     lnPpr               = appData.shoulderLinePrp;
     lnPpr.XData         = [x1, x2];
     lnPpr.YData         = [y1, y2];
     connLine            = line(lnPpr);
-    
+
     % Create right should point
     lnPpr = appData.rightShoulderPointPrp;
     lnPpr.XData = x2;
     lnPpr.YData = y2;
     point = line(lnPpr);
-    
+
     uistack(appData.lastCreatedPoint,'top')
     drawnow
-    
+
     % Add line and point to userdata points
     set(point, 'UserData', [appData.lastCreatedPoint, connLine, gobjects(1)])
     set(appData.lastCreatedPoint, 'UserData', [point, connLine, gobjects(1)])
-    
+
     appData.activeShoulderPoints(end+1) = appData.lastCreatedPoint;
-    
+
     appData.nextIsSecondPoint = false;
     appData.lastCreatedPoint = '';
 else
@@ -1552,7 +1566,7 @@ else
     lnPpr.XData = evd.IntersectionPoint(1);
     lnPpr.YData = evd.IntersectionPoint(2);
     point = line(lnPpr);
-    
+
     appData.nextIsSecondPoint = true;
     appData.lastCreatedPoint = point;
 end
@@ -1651,7 +1665,7 @@ if all(curPointLoc{1} == get(hPoint, 'XData')) && all(curPointLoc{2} == get(hPoi
     setAppData(fig, {}, 'curPointLoc')
     % Activate point
     shoulderGui_switchPointSelection(hPoint, fig, true) % Sometimes gives an error
-    
+
     return
 end
 
@@ -1833,7 +1847,7 @@ for ii = 1:size(pointData,1)
         lnPpr.Color     = appData.inactiveShoulderLineColor;
     end
     connLine            = line(lnPpr);
-    
+
     lnPpr = appData.leftShoulderPointPrp;
     if ~isActive
         lnPpr.MarkerFaceColor = appData.inactiveShoulderPointColor;
@@ -1842,7 +1856,7 @@ for ii = 1:size(pointData,1)
     lnPpr.XData = pointData(ii,1);
     lnPpr.YData = pointData(ii,2);
     leftPoint = line(lnPpr);
-    
+
     lnPpr = appData.rightShoulderPointPrp;
     if ~isActive
         lnPpr.MarkerFaceColor = appData.inactiveShoulderPointColor;
@@ -1851,7 +1865,7 @@ for ii = 1:size(pointData,1)
     lnPpr.XData = pointData(ii,3);
     lnPpr.YData = pointData(ii,4);
     rightPoint = line(lnPpr);
-    
+
     if size(pointData,2) == 5 && ~isnan(pointData(ii,5))
         shoulderTextPrp = appData.shoulderTextPrp;
         shoulderTextPrp.String = char(64 + pointData(ii,5));
@@ -1860,7 +1874,7 @@ for ii = 1:size(pointData,1)
     else
         hText = gobjects(1);
     end
-    
+
     set(leftPoint, 'UserData', [rightPoint, connLine, hText])
     set(rightPoint, 'UserData', [leftPoint, connLine, hText])
     points(ii) = leftPoint;
@@ -1884,15 +1898,16 @@ end  % #clearPoints
 function [succes, appData] = shoulderGui_initSaveFile(appData)
 
 if ~isempty(appData.dataFilename)
-   filename = appData.dataFilename;   
+    filename = appData.dataFilename;
 else
-    [succes, filename] = shoulderGui_chooseSaveFilename();
+    [succes, pd, filename] = shoulderGui_chooseSaveFilename();
     if ~succes
         return
     end
     if isfile(filename)
         delete(filename)
     end
+    appData.dataPd = pd;
     appData.dataFilename = filename;
 end
 
@@ -1924,11 +1939,12 @@ switch field
         end
         videoSaveData.frameRate = appData.videoData.vidObj.FrameRate;
         videoSaveData.duration = appData.videoData.vidObj.Duration;
-        videoSaveData.filename = appData.videoData.flNm;
+
+        [videoSaveData.pdParts, videoSaveData.file] = shoulderGui_getFileParts(appData.videoData.flNm, appData.dataPd);
         appData.dataFile.video = videoSaveData;
     case 'interval'
         appData.dataFile.analysisStepCount = appData.analysisStepCount;
-        appData.dataFile.interval = appData.interval;        
+        appData.dataFile.interval = appData.interval;
     case 'rectangle'
         appData.dataFile.rectangle = shoulderGui_getRectangleSaveData(appData.rectangle);
     case 'groups'
@@ -1939,6 +1955,18 @@ switch field
 end
 
 end  % #saveData2file
+%__________________________________________________________
+%% #getFileParts
+%
+function [pdParts, file] = shoulderGui_getFileParts(videoFilename, dataPd)
+
+[pd, fl, ext] = fileparts(videoFilename);
+file = [fl ext];
+pdRel = relativepath(pd, dataPd);
+pdParts = strsplit(pdRel, filesep);
+pdParts(strcmpi(pdParts, '')) = [];
+
+end  % #getFileParts
 %__________________________________________________________
 %% #getRectangleSaveData
 %
@@ -1956,22 +1984,22 @@ saveData.extent = rectangleData.extent;
 lines = struct('x', {}, 'y', {});
 for ii = 1:numel(rectangleData.lines)
     lines(ii).x = get(rectangleData.lines(ii), 'XData');
-    lines(ii).y = get(rectangleData.lines(ii), 'YData');    
+    lines(ii).y = get(rectangleData.lines(ii), 'YData');
 end % for ii
-saveData.lines = lines;    
+saveData.lines = lines;
 
 points = struct('x', {}, 'y', {});
 for ii = 1:numel(rectangleData.points)
     points(ii).x = get(rectangleData.points(ii), 'XData');
-    points(ii).y = get(rectangleData.points(ii), 'YData');    
+    points(ii).y = get(rectangleData.points(ii), 'YData');
 end % for ii
-saveData.points = points;    
+saveData.points = points;
 
 end  % #getRectangleSaveData
 %__________________________________________________________
 %% #chooseSaveFilename
 %
-function [succes, filename] = shoulderGui_chooseSaveFilename()
+function [succes, path, filename] = shoulderGui_chooseSaveFilename()
 
 succes = false;
 filename = '';
@@ -2031,6 +2059,10 @@ end  % #convertToFrameNr
 %
 function shoulderGui_addRectangleFromData(fig, rectangleS)
 
+if isfield(rectangleS, 'main')
+    rectangleS = shoulderGui_getRectangleFromOldDataStruct(rectangleS);
+end
+
 x0 = rectangleS.points(1).x;
 y0 = rectangleS.points(1).y;
 x1 = rectangleS.points(2).x;
@@ -2048,6 +2080,32 @@ shoulderGui_drawRectangle(fig, x0, y0, x1, y1, angle, lineCoords, extent);
 
 end  % #addRectangleFromData
 %__________________________________________________________
+%% #getRectangleFromOldDataStruct
+%
+function rectangleS = shoulderGui_getRectangleFromOldDataStruct(rectangleOldS)
+
+main  = rectangleOldS.main;
+
+x0 = main.ll.x;
+y0 = main.ll.y;
+x1 = main.ur.x;
+y1 = main.ur.y;
+
+rectangleS.points(1).x = x0;
+rectangleS.points(1).y = y0;
+rectangleS.points(2).x = x1;
+rectangleS.points(2).y = y1;
+
+rectangleS.angle = main.angle;
+
+[lineCoords, extent, ~, ~] = shoulderGui_getRectangleLineCoords(x0, y0, x1, y1, main.angle);
+rectangleS.extent = extent;
+
+rectangleS.lines = lineCoords;
+
+end  % #addRectangleFromData
+%__________________________________________________________
+
 %% #switchPointSelection
 %
 function shoulderGui_switchPointSelection(hPoint, fig, isSelected)
@@ -2057,7 +2115,7 @@ if isSelected
     if isempty(userData)
         return
     end
-    
+
     setAppData(fig, hPoint, 'selectedPoint')
     % Make point selected visually
     markerSize = getAppData(fig, 'selectedMarkerSize');
@@ -2106,15 +2164,15 @@ if strcmpi(evd.Key, 'delete')
 else
     x = get(hPoint, 'XData');
     y = get(hPoint, 'YData');
-    
+
     xOther = get(otherPoint, 'XData');
     yOther = get(otherPoint, 'YData');
-    
+
     shoulderTextPrp = getAppData(fig, 'shoulderTextPrp');
     shoulderTextPrp.String = upper(evd.Key);
     shoulderTextPrp.Position = [mean([x, xOther]), mean([y, yOther]), 0];
     hText = text(shoulderTextPrp);
-    
+
     otherUserData(3) = hText;
     userData(3) = hText;
 end
@@ -2125,6 +2183,30 @@ shoulderGui_switchPointSelection(hPoint, fig, false)
 
 end  % #shoulderKeyPress
 %__________________________________________________________
+%% #fixPathsInFile
+%
+function shoulderGui_fixPathsInFile(filename, videoPath)
+
+if isdir(filename)
+    dirInfo = dir(filename);
+    dirInfo([dirInfo.isdir]) = [];
+    filenames = cellfun(@fullfile, {dirInfo.folder}, {dirInfo.name}, 'UniformOutput',false);
+else
+    filenames = {filename};
+end
+
+for i = 1:numel(filenames)
+    filename = filenames{i};
+    data = load(filename);
+    dataPd = fileparts(filename);
+    [~, fl, ext] = fileparts(data.video.filename);
+    [data.video.pdParts, data.video.file] = shoulderGui_getFileParts(fullfile(videoPath, [fl, ext]), dataPd);
+    data.video = rmfield(data.video, 'filename');
+    save(filename, '-struct', 'data');
+end % for i
+
+end % #fixPathsInFile
+%__________________________________________________________
 %% #convertOldMat2new
 %
 function shoulderGui_convertOldMat2new(filename)
@@ -2134,7 +2216,7 @@ data = load(filename);
 appData = struct;
 fldNms = fieldnames(data);
 for ii = 1:numel(fldNms)
-    appData.(fldNms{ii}) = data.(fldNms{ii});        
+    appData.(fldNms{ii}) = data.(fldNms{ii});
 end % for ii
 
 appData.videoData.vidObj = struct;
@@ -2142,6 +2224,7 @@ appData.videoData.vidObj.FrameRate = appData.video.frameRate;
 appData.videoData.vidObj.Duration = appData.video.duration;
 appData.videoData.flNm = appData.video.filename;
 
+appData.dataPd = fileparts(filename);
 appData.dataFilename = filename;
 
 delete(filename)
@@ -2214,7 +2297,7 @@ switch action
     case 'fcnHandle'
         varargout{1} = eval(['@shoulderGui_rrr_', varargin{1}]);
     case 'sss'
-        
+
     otherwise
         error('.')
 end
@@ -2222,7 +2305,7 @@ end
 % _________________________________________________________
 % _rrr_sub1
     function shoulderGui_rrr_sub1
-        
+
     end  % _rrr_sub1
 
 end  % #rrr
